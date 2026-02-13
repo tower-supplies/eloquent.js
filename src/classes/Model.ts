@@ -307,7 +307,14 @@ export default class Model<TAttributes, T extends TDatabase> {
    */
   factory(attributes: Partial<TAttributes> = {}): this {
     const { constructor } = Object.getPrototypeOf(this);
-    return new constructor(this._containerKey, this._database, attributes, this._onChange, this._relations);
+    return new constructor(
+      this._containerKey,
+      this._database,
+      attributes,
+      this._onChange,
+      this._relations,
+      this._schema
+    );
   }
 
   /**
