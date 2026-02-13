@@ -11,7 +11,7 @@ interface TDatabaseMigrations<TDatabase> {
   callback: TDatabaseMigrationsCallback;
   migrations: TMigrations;
   seeder?: TSeeder;
-  PleaseWait?: ReactNode;
+  Migrating?: ReactNode;
 }
 
 /**
@@ -25,7 +25,7 @@ function DatabaseMigrations<T extends TDatabase>({
   callback,
   migrations,
   seeder,
-  PleaseWait,
+  Migrating,
 }: TDatabaseMigrations<T>) {
   const { success, error } = useMigrations(database, migrations);
 
@@ -51,7 +51,7 @@ function DatabaseMigrations<T extends TDatabase>({
   // Show migration in progresss
   if (!success) {
     return (
-      PleaseWait ?? (
+      Migrating ?? (
         <View>
           <Text>Migrations are in progress...</Text>
         </View>

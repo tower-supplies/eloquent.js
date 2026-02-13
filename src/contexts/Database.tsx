@@ -23,7 +23,7 @@ interface TProviderProps {
   schema?: TSchema;
   seeder?: TSeeder;
   Initialising?: ReactNode;
-  PleaseWait?: ReactNode;
+  Migrating?: ReactNode;
 }
 
 interface TDatabaseContext<TDatabase extends TDatabaseType, TModels> {
@@ -72,7 +72,7 @@ const DatabaseProvider = <TDatabase extends TDatabaseType, TModels extends TMode
   seeder,
   schema,
   Initialising,
-  PleaseWait,
+  Migrating,
 }: TProviderProps) => {
   const [database, setDatabase] = useState<TDatabase | null>(null);
   const [migrated, setMigrated] = useState<boolean>(false);
@@ -146,6 +146,8 @@ const DatabaseProvider = <TDatabase extends TDatabaseType, TModels extends TMode
     }
   }, [database, migrated]);
 
+  const isInitialising = !database || (database && !migrations) ? (Initialising ?? <DatabaseInitialising />) : null;
+
   return (
     <DatabaseContext.Provider value={{ database, models, onChange }}>
       <DatabaseOpener<TDatabase> databaseName={databaseName} callback={setDatabase} schema={schema} />
@@ -156,10 +158,10 @@ const DatabaseProvider = <TDatabase extends TDatabaseType, TModels extends TMode
           errorHandler={errorHandler}
           migrations={migrations}
           seeder={seeder}
-          PleaseWait={PleaseWait}
+          Migrating={Migrating}
         />
       )}
-      {database && migrated ? <>{children}</> : (Initialising ?? <DatabaseInitialising />)}
+      {database && migrated ? <>{children}</> : isInitialising}
     </DatabaseContext.Provider>
   );
 };
