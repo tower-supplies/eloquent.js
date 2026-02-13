@@ -399,7 +399,7 @@ export default class Model<TAttributes, T extends TDatabase> {
     }
     // Reset the changes on the existing model when successful
     if (success) {
-      this._original = this.completeAttributes(this._attributes);
+      this._original = this.completedAttributes(this._attributes);
       this._changes = {};
     }
     return success;
