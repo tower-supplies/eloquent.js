@@ -148,7 +148,7 @@ const DatabaseProvider = <TDatabase extends TDatabaseType, TModels extends TMode
 
   return (
     <DatabaseContext.Provider value={{ database, models, onChange }}>
-      <DatabaseOpener<TDatabase> databaseName={databaseName} callback={setDatabase} />
+      <DatabaseOpener<TDatabase> databaseName={databaseName} callback={setDatabase} schema={schema} />
       {database && migrations && (
         <DatabaseMigrations<TDatabase>
           database={database}
