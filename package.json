@@ -1,0 +1,57 @@
+{
+  "name": "@tower-supplies/eloquent.js",
+  "description": "An object relation mapper (ORM) library, inspired by Laravel's Eloquent",
+  "version": "1.0.0",
+  "author": "Adrian Stokes <adrian.stokes@towersupplies.com>",
+  "license": "MIT",
+  "files": [
+    "src/"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tower-supplies/validator.js"
+  },
+  "bugs": {
+    "url": "https://github.com/tower-supplies/validator.js/issues"
+  },
+  "keywords": [
+    "data",
+    "model",
+    "orm",
+    "laravel",
+    "laravel-eloquent-for-js"
+  ],
+  "dependencies": {
+    "@tower-supplies/validator.js": "^5.1.5",
+    "collect.js": "^4.36.1",
+    "drizzle-orm": "^0.45.1",
+    "expo-sqlite": "^16.0.10",
+    "fast-equals": "^6.0.0",
+    "pluralize": "^8.0.0",
+    "react": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/pluralize": "^0.0.33",
+    "@types/react": "^19.2.14",
+    "eslint": "^9.39.2",
+    "prettier": "^3.8.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.55.0",
+    "vite": "^7.3.1",
+    "vitest": "^4.0.18"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "checks": "npm run check:lint && npm run check:prettier && npm run check:tsc",
+    "check:lint": "eslint .",
+    "check:prettier": "prettier -c .",
+    "check:tsc": "tsc --noemit",
+    "test": "vitest run",
+    "test:watch": "vitest watch"
+  }
+}
