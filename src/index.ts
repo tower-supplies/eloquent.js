@@ -1,4 +1,3 @@
-
 import { Model } from './classes';
 import { DatabaseProvider, useDatabaseContext } from './contexts';
 
