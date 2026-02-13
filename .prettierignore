@@ -1,0 +1,8 @@
+# Production / distribution code
+dist/
+
+# Storage logs
+storage/logs/
+
+# Test coverage
+tests/coverage

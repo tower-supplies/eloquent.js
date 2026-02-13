@@ -1,0 +1,17 @@
+import { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
+import { ReactNode } from 'react';
+
+export type TDatabase = ExpoSQLiteDatabase<Record<string, unknown>>;
+export type TErrorHandler = (database: TDatabase, details: string, whenWhile: string) => ReactNode;
+export interface TMigrations {
+  journal: {
+    entries: {
+      idx: number;
+      when: number;
+      tag: string;
+      breakpoints: boolean;
+    }[];
+  };
+  migrations: Record<string, string>;
+}
+export type TSeeder = <TDatabase>(database: TDatabase) => Promise<void>;
