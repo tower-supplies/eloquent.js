@@ -81,22 +81,22 @@ const DatabaseProvider = <TDatabase extends TDatabaseType, TModels extends TMode
   /**
    * Register a model in the given container
    * @param {TModels} container
-   * @param {TModelType} containerKey
+   * @param {TModelType} modelKey
    * @param {TModel} model
    * @param {TDb} database
    * @param {TOnChangeModel} onChange
-   * @param {TModels} relations
+   * @param {TModels} models
    */
   function registerModel<K extends keyof typeof databaseModels>(
     container: TModels,
-    containerKey: K,
     database: TDatabase,
+    schema: TSchema,
+    models: TDatabaseModels,
+    modelKey: K,
     model: (typeof databaseModels)[K],
-    onChange: TOnChangeModel,
-    relations: TDatabaseModels,
-    schema: TSchema
+    onChange: TOnChangeModel
   ) {
-    container[containerKey] = new model(containerKey, database, {}, onChange, relations, schema) as TModels[K];
+    container[modelKey] = new model({}, database, schema, models, onChange) as TModels[K];
   }
 
   /**
@@ -110,12 +110,12 @@ const DatabaseProvider = <TDatabase extends TDatabaseType, TModels extends TMode
       const payload: TModels = {} as TModels;
       registerModel(
         payload,
-        modelKey,
         database,
-        databaseModels[modelKey],
-        onChange,
+        schema as unknown as TSchema,
         databaseModels,
-        schema as unknown as TSchema
+        modelKey,
+        databaseModels[modelKey],
+        onChange
       );
       setModels({ type: ModelsActionType.CHANGE_MODELS, payload });
     }
@@ -132,12 +132,12 @@ const DatabaseProvider = <TDatabase extends TDatabaseType, TModels extends TMode
       for (const key of Object.keys(databaseModels) as (keyof typeof databaseModels)[]) {
         registerModel(
           payload,
-          key,
           database,
-          databaseModels[key],
-          onChange,
+          schema as unknown as TSchema,
           databaseModels,
-          schema as unknown as TSchema
+          key,
+          databaseModels[key],
+          onChange
         );
       }
 

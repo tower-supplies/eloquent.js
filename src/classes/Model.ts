@@ -34,11 +34,10 @@ function setProperty<T extends object, K extends PropertyKey, V extends K extend
 
 export default class Model<TAttributes, T extends TDatabase> {
   // Declare property types
-  protected _containerKey: keyof TModels<TDatabaseModels>;
   protected _database: T;
+  protected _models: TDatabaseModels | undefined = undefined;
   protected _onChange: TOnChangeModel | undefined = undefined;
   protected _primaryKeyColumn: SQLiteColumn | undefined;
-  protected _relations: TDatabaseModels | undefined = undefined;
   protected _schema: TSchema;
   protected _schemaKey!: string;
   protected _table!: SQLiteTable;
@@ -152,18 +151,17 @@ export default class Model<TAttributes, T extends TDatabase> {
    * @param {TSchema} schema
    */
   constructor(
-    containerKey: keyof TModels<TDatabaseModels>,
-    database: T,
     attributes: Partial<TAttributes> = {},
-    onChange: TOnChangeModel | undefined = undefined,
-    relations: TDatabaseModels | undefined = undefined,
-    schema: TSchema
+    database: T,
+    schema: TSchema,
+    models: TDatabaseModels | undefined = undefined,
+    modelKey: keyof TModels<TDatabaseModels>,
+    onChange: TOnChangeModel | undefined = undefined
   ) {
     //console.log(`Initialising ${containerKey}:`, attributes);
-    this._containerKey = containerKey;
     this._database = database;
+    this._models = models;
     this._onChange = onChange;
-    this._relations = relations;
     this._schema = schema;
     this._schemaKey = this._schemaKey || this.guessSchemaKey();
     this._table = this._table || this.guessTable();
@@ -274,14 +272,14 @@ export default class Model<TAttributes, T extends TDatabase> {
       // Model names are singular PascalCase (e.g. Scan, ScanLocation)
       const relatedModel = ucfirst(Pluralize.singular(key));
       // Check if table and model exist
-      if (this._schema[relatedTable] && this._relations?.[relatedModel]) {
+      if (this._schema[relatedTable] && this._models?.[relatedModel]) {
         //console.log(`Relation: ${key} => ${relatedModel} (${relatedTable})`, value);
-        const model = this._relations[relatedModel];
+        const model = this._models[relatedModel];
         const property = Array.isArray(value)
           ? value.map(
-              (entry) => new model(relatedModel, this._database, entry, this._onChange, this._relations, this._schema)
+              (entry) => new model(entry, this._database, this._schema, this._models, relatedModel, this._onChange)
             )
-          : new model(relatedModel, this._database, value, this._onChange, this._relations, this._schema);
+          : new model(value, this._database, this._schema, this._models, relatedModel, this._onChange);
         setProperty(this._attributes, key, property);
       }
     }
@@ -307,14 +305,7 @@ export default class Model<TAttributes, T extends TDatabase> {
    */
   factory(attributes: Partial<TAttributes> = {}): this {
     const { constructor } = Object.getPrototypeOf(this);
-    return new constructor(
-      this._containerKey,
-      this._database,
-      attributes,
-      this._onChange,
-      this._relations,
-      this._schema
-    );
+    return new constructor(attributes, this._database, this._schema, this._models, this._onChange);
   }
 
   /**
@@ -431,10 +422,7 @@ export default class Model<TAttributes, T extends TDatabase> {
    */
   hydrate(rows: any[]): this[] {
     const { constructor } = Object.getPrototypeOf(this);
-    //console.log(`Hydrating ${this._containerKey}`, rows);
-    return rows.map(
-      (item) => new constructor(this._containerKey, this._database, item, this._onChange, this._relations, this._schema)
-    );
+    return rows.map((item) => new constructor(item, this._database, this._schema, this._models, this._onChange));
   }
 
   /**
