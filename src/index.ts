@@ -1,6 +1,6 @@
 import { Model } from './classes';
 import { DatabaseProvider, useDatabaseContext } from './contexts';
 
-export { DatabaseProvider, useDatabaseContext };
+export { DatabaseProvider, Model, useDatabaseContext };
 
 export default Model;
