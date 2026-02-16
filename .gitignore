@@ -9,7 +9,7 @@ npm-debug.*
 yarn-debug.*
 yarn-error.*
 
-#dist
+# dist
 dist/
 
 # typescript

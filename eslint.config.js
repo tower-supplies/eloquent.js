@@ -1,7 +1,10 @@
 import eslint from '@eslint/js';
 import tseslint from 'typescript-eslint';
 
-export default tseslint.config(
+export default [
+  {
+    ignores: ['dist/**/*'],
+  },
   eslint.configs.recommended,
   //...tseslint.configs.recommendedTypeChecked,
   ...tseslint.configs.stylisticTypeChecked,
@@ -24,7 +27,6 @@ export default tseslint.config(
   {
     // Disable type-aware linting on JS files
     files: ['**/*.js'],
-    ignores: ['dist/**/*.js'],
     ...tseslint.configs.disableTypeChecked,
-  }
-);
+  },
+];
