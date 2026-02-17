@@ -59,7 +59,7 @@ const extendSelectQuery = <T extends TDatabase, TAttributes, TModel extends Mode
     field: SQLiteColumn,
     values: (number | string)[] | undefined
   ): TSelectQueryExtended<TAttributes, TModel> => {
-    if (values) {
+    if (values?.length) {
       extendedSelectQuery.where(inArray(field, values));
     }
     return extendedSelectQuery;
@@ -76,7 +76,7 @@ const extendSelectQuery = <T extends TDatabase, TAttributes, TModel extends Mode
     field: SQLiteColumn,
     values: (number | string)[] | undefined
   ): TSelectQueryExtended<TAttributes, TModel> => {
-    if (values) {
+    if (values?.length) {
       extendedSelectQuery.where(notInArray(field, values));
     }
     return extendedSelectQuery;

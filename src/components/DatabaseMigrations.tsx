@@ -2,6 +2,7 @@ import { useMigrations } from 'drizzle-orm/expo-sqlite/migrator';
 import { ReactNode, useEffect } from 'react';
 import { Text, View } from 'react-native';
 
+import { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { TDatabase, TErrorHandler, TMigrations, TSeeder } from '../types';
 
 type TDatabaseMigrationsCallback = (migrated: boolean) => void;
@@ -27,7 +28,14 @@ function DatabaseMigrations<T extends TDatabase>({
   seeder,
   Migrating,
 }: TDatabaseMigrations<T>) {
-  const { success, error } = useMigrations(database, migrations);
+  let success = false;
+  let error: Error | undefined;
+
+  if (database instanceof ExpoSQLiteDatabase) {
+    ({ success, error } = useMigrations(database, migrations));
+  } else {
+    // BetterSQLite3
+  }
 
   useEffect(() => {
     if (!success) {

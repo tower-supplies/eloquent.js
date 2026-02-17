@@ -1,0 +1,366 @@
+import Database from 'better-sqlite3';
+import collect from 'collect.js';
+import { drizzle } from 'drizzle-orm/better-sqlite3';
+import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
+import { resolve } from 'path';
+import { beforeAll, describe, expect, it } from 'vitest';
+
+import * as extendedRelationalQuery from '@/extensions/extendedRelationalQuery';
+import reset from '@/utils/reset';
+
+import DatabaseModels, { County, NoKey, Town, User } from '../../support/database/models';
+import * as schema from '../../support/database/schema';
+import { TDatabase } from '../../support/database/types';
+
+const drizzleDb: TDatabase = drizzle(new Database('test.db'), { schema });
+const noKey = new NoKey({}, drizzleDb, schema, DatabaseModels);
+const user = new User({}, drizzleDb, schema, DatabaseModels);
+const town = new Town({}, drizzleDb, schema, DatabaseModels);
+const county = new County({}, drizzleDb, schema, DatabaseModels);
+
+beforeAll(async () => {
+  // Extend the relational query
+  extendedRelationalQuery;
+
+  // Reset the database before applying migrations
+  await reset(drizzleDb);
+  await migrate(drizzleDb, { migrationsFolder: resolve(__dirname, '../../support/database/migrations') });
+});
+
+class UnknownClass extends User {}
+
+describe('guessTable', () => {
+  it('throws an error when attempting to guess a table that is not defined in the schema', () => {
+    const instantiateUnknown = () => new UnknownClass({}, drizzleDb, schema, DatabaseModels);
+    expect(instantiateUnknown).toThrowError(new Error('Unable to find entry in schema: unknownClassesTable'));
+  });
+});
+
+describe('all', () => {
+  it('returns an empty collection when there are no instances of a model', async () => {
+    const users = await user.all();
+    expect(users).toEqual(collect());
+    expect(users.count()).toEqual(0);
+  });
+});
+
+describe('save', () => {
+  it('returns false when unable to persist a new model', async () => {
+    const newUser = user.factory({ name: 'John' });
+    const saved = await newUser.save();
+    expect(saved).toEqual(false);
+  });
+
+  it('returns true when able to persist a new model', async () => {
+    const newUser = user.factory({ name: 'John' });
+    newUser.age = 42; // Test setting parameter(s) after model initialising
+    newUser.email = 'john@eloquent.js';
+    const saved = await newUser.save();
+    expect(saved).toEqual(true);
+    expect(newUser.id).toEqual(1);
+
+    // Check that model persisted as expected
+    const users = await user.all();
+    expect(users.count()).toEqual(1);
+    const savedUser = users.first();
+    expect(savedUser.id).toEqual(1);
+    expect(savedUser.name).toEqual('John');
+    expect(savedUser.age).toEqual(42);
+    expect(savedUser.email).toEqual('john@eloquent.js');
+  });
+
+  it('returns false when unable to update an existing model', async () => {
+    const savedUser = await user.find(1);
+    expect(savedUser?.id).toEqual(1);
+    if (savedUser) {
+      savedUser.age = null;
+      expect(savedUser.getChanges()).toEqual({ age: null });
+      const saved = await savedUser.save();
+      expect(saved).toEqual(false);
+    }
+  });
+
+  it('returns true when able to update an existing model', async () => {
+    const savedUser = await user.find(1);
+    expect(savedUser?.id).toEqual(1);
+    if (savedUser) {
+      savedUser.age = 43;
+      const saved = await savedUser.save();
+      expect(saved).toEqual(true);
+    }
+  });
+
+  it('returns false when there are no changes to save', async () => {
+    const savedUser = await user.find(1);
+    expect(savedUser?.id).toEqual(1);
+    const saved = await savedUser?.save();
+    expect(saved).toEqual(false);
+  });
+
+  it('returns true when persisting a model without keys', async () => {
+    const newNoKey = noKey.factory({ field: 'abc', value: '123' });
+    const saved = await newNoKey.save();
+    expect(saved).toEqual(true);
+  });
+});
+
+describe('find', () => {
+  it('returns null when the key is not found', async () => {
+    const savedUser = await user.find(101);
+    expect(savedUser).toEqual(null);
+  });
+
+  it('returns an instance of the model when the key is found', async () => {
+    const savedUser = await user.find(1);
+    expect(savedUser?.id).toEqual(1);
+  });
+});
+
+describe('getAttribute', () => {
+  it('returns the property of a model', () => {
+    const newUser = user.factory({ name: 'John' });
+    expect(newUser.getAttribute('name')).toEqual('John');
+  });
+
+  it('returns the allback when the property is not present/set', async () => {
+    const newUser = user.factory({ name: 'John' });
+    expect(newUser.getAttribute('age', 21)).toEqual(21);
+  });
+
+  it('returns undefined when the property is not present/set, and no fallback provided', async () => {
+    const newUser = user.factory({ name: 'John' });
+    expect(newUser.getAttribute('age')).toEqual(undefined);
+  });
+});
+
+describe('getAttributes', () => {
+  it('returns the properties of a model', () => {
+    const properties = { name: 'John', age: 32 };
+    const newUser = user.factory(properties);
+    expect(newUser.getAttributes()).toEqual(properties);
+  });
+});
+
+describe('getPersistedAttributes', () => {
+  it('returns undefined if the model is not capable of being persisted', () => {
+    const properties = { name: 'James', age: 32 };
+    const newUser = user.factory(properties);
+    expect(newUser.getPersistedAttributes()).toEqual(undefined);
+  });
+
+  it('returns the attributes of the model if it is capable of being persisted (but has not yet been saved)', () => {
+    const properties = { name: 'James', age: 32, email: 'james@elqouent.js' };
+    const newUser = user.factory(properties);
+    expect(newUser.getPersistedAttributes()).toEqual(properties);
+  });
+
+  it('returns the attributes of the model if it has been persisted', async () => {
+    const properties = { name: 'Jimmy', age: 32, email: 'jimmy@eloquent.js' };
+    const newUser = user.factory(properties);
+    await newUser.save();
+    expect(newUser.getPersistedAttributes()).toEqual({ id: 2, ...properties });
+  });
+});
+
+describe('setAttribute', () => {
+  it('set the property of a model', () => {
+    const newUser = user.factory({ name: 'John' });
+    newUser.setAttribute('name', 'James');
+    expect(newUser.name).toEqual('James');
+  });
+
+  it("ignores properties which don't exist", () => {
+    const newUser = user.factory({ name: 'John' });
+    newUser.setAttribute('job', 'Director');
+    expect(newUser.job).toEqual(undefined);
+  });
+});
+
+describe('hydrate', () => {
+  it('converts as array of objects to an array of models', () => {
+    const userObjects = [
+      {
+        name: 'Bill',
+        age: 57,
+        email: 'bill@test.com',
+      },
+      {
+        name: 'Ben',
+        age: 55,
+        email: 'ben@test.com',
+      },
+    ];
+    const userModels = user.hydrate(userObjects);
+    expect(userModels.length).toEqual(2);
+    userModels.forEach((userModel, index) => {
+      expect(userModel).toBeInstanceOf(User);
+      expect(userModel.getAttributes()).toEqual(userObjects[index]);
+    });
+  });
+});
+
+describe('setAttributes', () => {
+  it('sets multiple properties of a model', () => {
+    const newUser = user.factory({ name: 'John' });
+    newUser.setAttributes({
+      age: 27,
+      email: 'john@eloquent.js',
+    });
+    expect(newUser.getAttributes()).toEqual({
+      name: 'John',
+      age: 27,
+      email: 'john@eloquent.js',
+    });
+  });
+
+  it("ignores properties which don't exist", () => {
+    const newUser = user.factory({ name: 'John' });
+    newUser.setAttributes({
+      age: 27,
+      email: 'john@eloquent.js',
+      job: 'Director',
+    } as any);
+    expect(newUser.getAttributes()).toEqual({
+      name: 'John',
+      age: 27,
+      email: 'john@eloquent.js',
+    });
+  });
+});
+
+describe('delete', () => {
+  it('returns false when unable to delete a model', async () => {
+    const newUser = user.factory({ id: 101, name: 'John', age: 51, email: 'john@eloquent.js' });
+    const deleted = await newUser.delete();
+    expect(deleted).toEqual(false);
+  });
+
+  it('returns true when able to delete a model', async () => {
+    const newUser = user.factory({ name: 'John', age: 51, email: 'john.eloquent@eloquent.js' });
+    const saved = await newUser.save();
+    expect(saved).toEqual(true);
+    const deleted = await newUser.delete();
+    expect(deleted).toEqual(true);
+  });
+});
+
+describe('query (select)', () => {
+  it('has a hydrate method', async () => {
+    const query = user.query();
+    expect(query.hydrate).toBeTypeOf('function');
+
+    const users = await user.query().hydrate();
+    expect(users.count()).toEqual(2);
+    const savedUser = users.first();
+    expect(savedUser.name).toEqual('John');
+  });
+
+  it('has a whereIn method', async () => {
+    const query = user.query();
+    expect(query.whereIn).toBeTypeOf('function');
+
+    const users = await user.query().whereIn(schema.usersTable.name, ['John']).hydrate();
+    expect(users.count()).toEqual(1);
+    const savedUser = users.first();
+    expect(savedUser.name).toEqual('John');
+
+    const queryWithoutCriteria = await user.query().whereIn(schema.usersTable.name, []);
+    expect(queryWithoutCriteria.length).toEqual(2);
+  });
+
+  it('has a whereNotIn method', async () => {
+    const query = user.query();
+    expect(query.whereIn).toBeTypeOf('function');
+
+    const users = await user.query().whereNotIn(schema.usersTable.name, ['John']).hydrate();
+    expect(users.count()).toEqual(1);
+    const savedUser = users.first();
+    expect(savedUser.name).toEqual('Jimmy');
+
+    const queryWithoutCriteria = await user.query().whereNotIn(schema.usersTable.name, []);
+    expect(queryWithoutCriteria.length).toEqual(2);
+  });
+});
+
+describe('relationships', () => {
+  it('supports nested hasOne and hasMany relations', async () => {
+    // Create counties
+    const dorset = county.factory({ name: 'Dorset' });
+    const leicestershire = county.factory({ name: 'Leicestershire ' });
+    const powys = county.factory({ name: 'Powys' });
+    const counties = [dorset, leicestershire, powys];
+    for (const aCounty of counties) {
+      await aCounty.save();
+    }
+
+    // Create towns
+    const bournemouth = town.factory({ name: 'Bournemouth', county_id: dorset.id });
+    const poole = town.factory({ name: 'Poole', county_id: dorset.id });
+    const hinckley = town.factory({ name: 'Hinckley', county_id: leicestershire.id });
+    const nuneaton = town.factory({ name: 'Nuneaton', county_id: leicestershire.id });
+    const welshpool = town.factory({ name: 'Welshpool', county_id: powys.id });
+    const newtown = town.factory({ name: 'Newtown', county_id: powys.id });
+    const towns = [bournemouth, poole, hinckley, nuneaton, welshpool, newtown];
+    for (const aTown of towns) {
+      await aTown.save();
+    }
+
+    // Create users (John and Jimmy exist from previous tests)
+    const bill = user.factory({ name: 'Bill', age: 26, email: 'bill@eloquent.js' });
+    const ben = user.factory({ name: 'Ben', age: 27, email: 'ben@eloquent.js', town_id: bournemouth.id });
+    const bob = user.factory({ name: 'Bob', age: 28, email: 'bob@eloquent.js', town_id: bournemouth.id });
+    const brad = user.factory({ name: 'Brad', age: 29, email: 'brad@eloquent.js', town_id: poole.id });
+    const bernie = user.factory({ name: 'Bernie', age: 30, email: 'bernie@eloquent.js', town_id: hinckley.id });
+    const simon = user.factory({ name: 'Simon', age: 31, email: 'simon@eloquent.js', town_id: nuneaton.id });
+    const steve = user.factory({ name: 'Steve', age: 32, email: 'steve@eloquent.js', town_id: welshpool.id });
+    const susie = user.factory({ name: 'Susie', age: 33, email: 'susie@eloquent.js', town_id: welshpool.id });
+    const sarah = user.factory({ name: 'Sarah', age: 34, email: 'sarah@eloquent.js', town_id: newtown.id });
+    const steph = user.factory({ name: 'Steph', age: 35, email: 'steph@eloquent.js', town_id: newtown.id });
+    const users = [bill, ben, bob, brad, bernie, simon, steve, susie, sarah, steph];
+    for (const aUser of users) {
+      await aUser.save();
+    }
+    // With many
+    const savedUsers = await drizzleDb.query.usersTable
+      .findMany({
+        with: {
+          town: {
+            with: {
+              county: true,
+            },
+          },
+        },
+      })
+      .hydrate(user);
+
+    expect(savedUsers.count()).toEqual(12);
+
+    const john = savedUsers.where('id', 1).first();
+    expect(john.name).toEqual('John');
+    expect(john.town).toEqual(undefined);
+
+    const savedBrad = savedUsers.where('name', 'Brad').first();
+    expect(savedBrad.name).toEqual('Brad');
+    expect(savedBrad.town.name).toEqual(poole.name); // Deep comparing the town may be cyclic
+    expect(savedBrad.town.county.name).toEqual(dorset.name); // Deep comparing the county may be cyclic
+
+    const savedCounties = await drizzleDb.query.countiesTable
+      .findMany({
+        with: {
+          towns: {
+            with: {
+              users: true,
+            },
+          },
+        },
+      })
+      .hydrate(county);
+
+    expect(savedCounties.count()).toEqual(3);
+
+    const savedDorset = savedCounties.where('name', 'Dorset').first();
+    expect(savedDorset.name).toEqual('Dorset');
+    expect(savedDorset.towns.length).toEqual(2);
+    expect(savedDorset.towns.map((town: Town) => town.name).join()).toEqual('Bournemouth,Poole');
+  });
+});

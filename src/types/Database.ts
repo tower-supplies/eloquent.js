@@ -1,7 +1,9 @@
+import { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
+
 import { ReactNode } from 'react';
 
-export type TDatabase = ExpoSQLiteDatabase<Record<string, unknown>>;
+export type TDatabase = BetterSQLite3Database<Record<string, unknown>> | ExpoSQLiteDatabase<Record<string, unknown>>;
 export type TErrorHandler = (database: TDatabase, details: string, whenWhile: string) => ReactNode;
 export interface TMigrations {
   journal: {

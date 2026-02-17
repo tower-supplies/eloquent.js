@@ -8,7 +8,7 @@ import Pluralize from 'pluralize';
 import DatabaseChangeType from '../enums/DatabaseChangeType';
 import extendSelectQuery, { TSelectQuery, TSelectQueryExtended } from '../extensions/extendedSelectQuery';
 import { modelValidator } from '../rules';
-import { TDatabase, TDatabaseModels, TModels, TOnChangeModel, TSchema } from '../types';
+import { TDatabase, TDatabaseModels, TOnChangeModel, TSchema } from '../types';
 import { ucfirst } from '../utils';
 
 /**
@@ -143,19 +143,17 @@ export default class Model<TAttributes, T extends TDatabase> {
 
   /**
    * Initialise the model
-   * @param {keyof TModels<TDatabaseModels>} containerKey
-   * @param {TDatabase} database
    * @param {TAttributes} attributes
-   * @param {TOnChangeModel | undefined} onChange
-   * @param {TDatabaseModels} relations
+   * @param {TDatabase} database
    * @param {TSchema} schema
+   * @param {TDatabaseModels} models
+   * @param {TOnChangeModel | undefined} onChange
    */
   constructor(
     attributes: Partial<TAttributes> = {},
     database: T,
     schema: TSchema,
     models: TDatabaseModels | undefined = undefined,
-    modelKey: keyof TModels<TDatabaseModels>,
     onChange: TOnChangeModel | undefined = undefined
   ) {
     //console.log(`Initialising ${containerKey}:`, attributes);
@@ -171,6 +169,10 @@ export default class Model<TAttributes, T extends TDatabase> {
     if (attributes) {
       this.setAttributes(attributes);
       this._original = this.completedAttributes(attributes);
+      if (this.getKey()) {
+        // No changes on initialising when key is given
+        this._changes = {};
+      }
     }
 
     // Return the proxied object to support "magic" methods
@@ -180,10 +182,11 @@ export default class Model<TAttributes, T extends TDatabase> {
   /**
    * Returns a specific attribute for the given instance
    * @param {keyof TAttributes} key
+   * @param {any} fallback
    * @returns {any}
    */
-  getAttribute(key: keyof TAttributes): any {
-    return this._attributes[key];
+  getAttribute(key: keyof TAttributes, fallback: any = undefined): any {
+    return this._attributes[key] ?? fallback;
   }
 
   /**
@@ -192,6 +195,14 @@ export default class Model<TAttributes, T extends TDatabase> {
    */
   getAttributes(): Partial<TAttributes> {
     return this._attributes;
+  }
+
+  /**
+   * Returns the changes to the current model (i.e. properties which have been changed but not yet persisted)
+   * @returns {Partial<TAttributes>}
+   */
+  getChanges(): Partial<TAttributes> {
+    return this._changes;
   }
 
   /**
@@ -276,10 +287,14 @@ export default class Model<TAttributes, T extends TDatabase> {
         //console.log(`Relation: ${key} => ${relatedModel} (${relatedTable})`, value);
         const model = this._models[relatedModel];
         const property = Array.isArray(value)
-          ? value.map(
-              (entry) => new model(entry, this._database, this._schema, this._models, relatedModel, this._onChange)
+          ? value.map((entry) =>
+              entry
+                ? new model(entry, this._database, this._schema, this._models, relatedModel, this._onChange)
+                : undefined
             )
-          : new model(value, this._database, this._schema, this._models, relatedModel, this._onChange);
+          : value
+            ? new model(value, this._database, this._schema, this._models, relatedModel, this._onChange)
+            : undefined;
         setProperty(this._attributes, key, property);
       }
     }
@@ -324,11 +339,11 @@ export default class Model<TAttributes, T extends TDatabase> {
    * @returns {Promise<boolean>}
    */
   async delete(): Promise<boolean> {
-    const success = false;
+    let success = false;
     const primaryKey = this.getKey();
     if (this._primaryKeyColumn && primaryKey) {
       const { changes } = await this._database.delete(this._table).where(eq(this._primaryKeyColumn, primaryKey));
-      const success = !!changes;
+      success = !!changes;
       if (success) {
         //console.log('Clearing primary keys');
         const keyName = this.getKeyName();
@@ -347,18 +362,15 @@ export default class Model<TAttributes, T extends TDatabase> {
    * @returns {Promise<number>}
    */
   protected async insert(): Promise<number> {
-    const { changes, lastInsertRowId } = await this._database.insert(this._table).values(this._attributes);
-    //.returning({ id: this._primaryKeyColumn });
-    //console.log('Insert', this._attributes, changes, lastInsertRowId);
+    const [result] = (await this._database.insert(this._table).values(this._attributes).returning()) as TAttributes[];
+    //console.log('Insert', this._attributes, result);
     const keyName = this.getKeyName();
-    if (keyName && lastInsertRowId) {
-      //console.log(`Updating primary key: ${lastInsertRowId}`);
-      setProperty(this._attributes, keyName, lastInsertRowId as any);
+    if (keyName && result[keyName]) {
+      //console.log(`Updating primary key: ${result[keyName]}`);
+      setProperty(this._attributes, keyName, result[keyName] as any);
     }
-    if (changes) {
-      this.changed(DatabaseChangeType.INSERT, this);
-    }
-    return changes;
+    this.changed(DatabaseChangeType.INSERT, this);
+    return 1;
   }
 
   /**
@@ -389,13 +401,19 @@ export default class Model<TAttributes, T extends TDatabase> {
    */
   async save(): Promise<boolean> {
     let success = false;
-    const primaryKey = this.getKey();
-    if (!primaryKey) {
-      const insertedRows = await this.insert();
-      success = !!insertedRows;
-    } else if (Object.keys(this._changes).length) {
-      const updatedRows = await this.update();
-      success = !!updatedRows;
+    try {
+      const primaryKey = this.getKey();
+      if (!primaryKey) {
+        const insertedRows = await this.insert();
+        success = !!insertedRows;
+      } else if (Object.keys(this._changes).length) {
+        const updatedRows = await this.update();
+        success = !!updatedRows;
+      }
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (e) {
+      // SqliteError, missing constraints etc.
+      //console.warn(e);
     }
     // Reset the changes on the existing model when successful
     if (success) {

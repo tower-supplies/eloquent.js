@@ -14,49 +14,15 @@ Validator.setMessages('en', en);
 Validator.useLang('en');
 
 /**
- * Start of example for test suite...
- *
-const nestedRules: Validator.Rules = {
-  name: 'required',
-  bio: {
-    age: 'min:18',
-    education: {
-      primary: 'string',
-      secondary: ['string', { 'in': ['school', 'university'] } ]
-    }
-  }
-};
-
-addRule(nestedRules, {
-  name: 'string',
-  email: ['required', 'string'],
-  bio: {
-    age: 'required',
-    education: {
-      secondary: 'required',
-    },
-  },
-});
-
-result = {
-  name: 'required|string',
-  bio: {
-    age: 'min:18|required',
-    education: {
-      primary: 'string',
-      secondary: ['string', { 'in': ['school', 'university'] }, 'required']
-    }
-  }
-};
-*/
-
-/**
  * Add/merge rules to existing rules
  * @param {Rules} existingRules
  * @param {string | Array<string | TypeCheckingRule> | Rules} additionalRules
  * @returns {Rules}
  */
-const addRules = (existingRules: Rules, additionalRules: string | (string | TypeCheckingRule)[] | Rules): Rules => {
+export const addRules = (
+  existingRules: Rules,
+  additionalRules: Rules | string | (string | TypeCheckingRule)[]
+): Rules | string[] => {
   // Convert to iterable rules
   const iterableRules = typeof additionalRules === 'string' ? additionalRules.split('|') : additionalRules;
 
@@ -89,7 +55,9 @@ const addRules = (existingRules: Rules, additionalRules: string | (string | Type
     }
   });
 
-  return existingRules;
+  return Object.keys(existingRules).every((key, index) => key === String(index))
+    ? (Object.values(existingRules) as string[])
+    : existingRules;
 };
 
 type TColumnTypeMapping = Record<string, string>;
@@ -148,7 +116,7 @@ const modelValidator = <TAttributes, T extends TDatabase>(
   rules: Rules = {},
   customErrorMessages: ErrorMessages = {}
 ) => {
-  return new Validator(model.getAttributes(), addRules(modelRules(model), rules), customErrorMessages);
+  return new Validator(model.getAttributes(), addRules(modelRules(model), rules) as Rules, customErrorMessages);
 };
 
 export default modelValidator;

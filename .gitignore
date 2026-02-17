@@ -14,3 +14,7 @@ dist/
 
 # typescript
 *.tsbuildinfo
+
+# tests (incl. coverage)
+test.db
+tests/coverage

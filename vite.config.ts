@@ -22,9 +22,4 @@ export default defineConfig({
     },
   },
   plugins: [typescript()],
-  resolve: {
-    alias: {
-      'react-native': 'react-native-web',
-    },
-  },
 });

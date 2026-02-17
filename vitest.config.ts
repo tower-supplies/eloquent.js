@@ -1,12 +1,14 @@
-import typescript from '@rollup/plugin-typescript';
+import { resolve } from 'path';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   //assetsInclude: ['./src/database/migrations/*.sql'],
-  plugins: [typescript()],
+  define: {
+    //'__DEV__': false,
+  },
   resolve: {
     alias: {
-      'react-native': 'react-native-web',
+      '@': resolve(__dirname, './src'),
     },
   },
   test: {
