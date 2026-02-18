@@ -1,9 +1,14 @@
+import { Relations } from 'drizzle-orm';
 import { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
+import { SQLiteTable } from 'drizzle-orm/sqlite-core';
 
 import { ReactNode } from 'react';
 
-export type TDatabase = BetterSQLite3Database<Record<string, unknown>> | ExpoSQLiteDatabase<Record<string, unknown>>;
+export type TSchema = Record<string, SQLiteTable | Relations>;
+export type TDatabase<Schema extends TSchema = Record<string, SQLiteTable | Relations>> =
+  | BetterSQLite3Database<Schema>
+  | ExpoSQLiteDatabase<Schema>;
 export type TErrorHandler = (database: TDatabase, details: string, whenWhile: string) => ReactNode;
 export interface TMigrations {
   journal: {
