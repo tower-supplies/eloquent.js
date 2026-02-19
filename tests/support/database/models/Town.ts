@@ -10,4 +10,9 @@ export interface TTown {
   users?: User[];
 }
 
-export default class Town extends EloquentModel<TTown> {}
+export class TownClass extends EloquentModel<TTown> {}
+
+interface Town extends TTown {}
+class Town extends TownClass {}
+
+export default Town;

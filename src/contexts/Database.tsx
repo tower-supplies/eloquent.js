@@ -1,5 +1,6 @@
 import { createContext, ReactNode, useContext, useEffect, useReducer, useState } from 'react';
 
+import { createEloquentModel } from '../classes';
 import { DatabaseInitialising, DatabaseMigrations, DatabaseOpener } from '../components';
 import { DatabaseChangeType, ModelsActionType } from '../enums';
 import { modelsReducer } from '../reducers';
@@ -96,7 +97,7 @@ const DatabaseProvider = <TDatabase extends TDatabaseType, TModels extends TMode
     model: (typeof databaseModels)[K],
     onChange: TOnChangeModel
   ) {
-    container[modelKey] = new model({}, database, schema, models, onChange) as TModels[K];
+    container[modelKey] = createEloquentModel(model, {}, database, schema, models, onChange) as TModels[K];
   }
 
   /**

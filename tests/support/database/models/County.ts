@@ -7,4 +7,9 @@ export interface TCounty {
   towns?: Town[];
 }
 
-export default class County extends EloquentModel<TCounty> {}
+export class CountyClass extends EloquentModel<TCounty> {}
+
+interface County extends TCounty {}
+class County extends CountyClass {}
+
+export default County;

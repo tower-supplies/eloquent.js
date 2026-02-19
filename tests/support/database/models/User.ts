@@ -10,4 +10,11 @@ export interface TUser {
   town?: Town;
 }
 
-export default class User extends EloquentModel<TUser> {}
+// The class without the interface properties
+export class UserClass extends EloquentModel<TUser> {}
+
+// Use declaration merging to add the properties to the class
+interface User extends TUser {}
+class User extends UserClass {}
+
+export default User;

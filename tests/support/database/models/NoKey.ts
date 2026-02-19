@@ -5,4 +5,9 @@ export interface TNoKey {
   value?: string;
 }
 
-export default class NoKey extends EloquentModel<TNoKey> {}
+export class NoKeyClass extends EloquentModel<TNoKey> {}
+
+interface NoKey extends TNoKey {}
+class NoKey extends NoKeyClass {}
+
+export default NoKey;

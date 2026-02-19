@@ -1,5 +1,7 @@
-import Model from '@/classes/Model';
+import Model from '@/classes/EloquentModel';
+
+import { TAttributes } from '@/types';
 
 import { TDatabase } from '../types';
 
-export default abstract class EloquentModel<TAttributes> extends Model<TAttributes, TDatabase> {}
+export default abstract class EloquentModel<T extends TAttributes> extends Model<T, TDatabase> {}

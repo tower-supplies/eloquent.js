@@ -42,7 +42,7 @@ function setProperty<T extends object, K extends PropertyKey, V extends K extend
   (object as any)[key] = value;
 }
 
-export default class Model<TAttributes extends Attributes, T extends TDatabase> {
+export default class EloquentModel<TAttributes extends Attributes, T extends TDatabase> {
   // Declare property types
   protected _database: T;
   protected _models: TDatabaseModels | undefined = undefined;
@@ -56,9 +56,6 @@ export default class Model<TAttributes extends Attributes, T extends TDatabase> 
   protected _attributes: Partial<TAttributes> = {};
   protected _changes: Partial<TAttributes> = {};
   protected _original: TAttributes | undefined;
-
-  // Avoid TypeScript complaining about property setters/getters
-  [key: string]: any;
 
   /**
    * Returns the primary key column for the table, or undefined if there is no primary key defined
@@ -78,7 +75,8 @@ export default class Model<TAttributes extends Attributes, T extends TDatabase> 
    * @returns {string}
    */
   protected guessSchemaKey(): string {
-    return `${toCamelCase(Pluralize(this.constructor.name))}Table`;
+    const className = this.constructor.name.replace(/Class$/, '');
+    return `${toCamelCase(Pluralize(className))}Table`;
   }
 
   /**
@@ -451,7 +449,7 @@ export default class Model<TAttributes extends Attributes, T extends TDatabase> 
     const relatedModel = ucfirst(Pluralize.singular(relationName));
     const model = this._models?.[relatedModel];
     if (instance && model) {
-      return new model({}, this._database, this._schema, this._models, this._onChange);
+      return createEloquentModel(model, {}, this._database, this._schema, this._models, this._onChange);
     }
     return model;
   }
@@ -527,12 +525,14 @@ export default class Model<TAttributes extends Attributes, T extends TDatabase> 
       //console.log(`Relation: ${key} => ${model}`, value);
       const property = Array.isArray(value)
         ? value.map((entry) =>
-            entry ? new model(entry, this._database, this._schema, this._models, this._onChange) : undefined
+            entry
+              ? createEloquentModel(model, entry, this._database, this._schema, this._models, this._onChange)
+              : undefined
           )
         : value
-          ? new model(value, this._database, this._schema, this._models, this._onChange)
+          ? createEloquentModel(model, value, this._database, this._schema, this._models, this._onChange)
           : undefined;
-      setProperty(this._attributes, key, property);
+      setProperty(this._attributes, key, property as any);
     }
 
     // No change made
@@ -552,11 +552,12 @@ export default class Model<TAttributes extends Attributes, T extends TDatabase> 
 
   /**
    * Creates a new model instance
-   * @returns {this}
+   * @returns {this & TAttributes}
    */
-  factory(attributes: Partial<TAttributes> = {}): this {
+  factory(attributes: Partial<TAttributes> = {}): this & TAttributes {
     const { constructor } = Object.getPrototypeOf(this);
-    return new constructor(attributes, this._database, this._schema, this._models, this._onChange);
+    return new constructor(attributes, this._database, this._schema, this._models, this._onChange) as this &
+      TAttributes;
   }
 
   /**
@@ -701,4 +702,15 @@ export default class Model<TAttributes extends Attributes, T extends TDatabase> 
     }
     return null;
   }
+}
+
+export function createEloquentModel<TAttributes extends Attributes, T extends TDatabase>(
+  model: typeof EloquentModel<TAttributes, T>,
+  attributes: Partial<TAttributes> = {},
+  database: T,
+  schema: TSchema,
+  models: TDatabaseModels | undefined = undefined,
+  onChange: TOnChangeModel | undefined = undefined
+) {
+  return new model(attributes, database, schema, models, onChange) as EloquentModel<TAttributes, T> & TAttributes;
 }

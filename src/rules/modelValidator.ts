@@ -2,7 +2,7 @@ import Validator, { ErrorMessages, Rules, TypeCheckingRule } from '@tower-suppli
 import collect from 'collect.js';
 import { SQLiteColumn, SQLiteInteger, SQLiteText } from 'drizzle-orm/sqlite-core';
 
-import Model from '../classes/Model';
+import Model from '../classes/EloquentModel';
 import { TDatabase } from '../types';
 import en from './lang/en';
 

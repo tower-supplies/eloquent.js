@@ -2,7 +2,7 @@ import { eq, inArray, Many, notInArray, One, Relation } from 'drizzle-orm';
 import { SQLiteColumn, SQLiteSelectBase } from 'drizzle-orm/sqlite-core';
 import { SQLiteRunResult } from 'expo-sqlite';
 
-import Model from '../classes/Model';
+import Model from '../classes/EloquentModel';
 import { TAttributes as Attributes, TDatabase } from '../types';
 
 export type TSelectQuery<TAttributes> = SQLiteSelectBase<

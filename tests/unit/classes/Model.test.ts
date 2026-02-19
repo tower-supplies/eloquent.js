@@ -6,18 +6,25 @@ import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { resolve } from 'path';
 import { beforeAll, describe, expect, it } from 'vitest';
 
+import { createEloquentModel } from '@/classes';
 import * as extendedRelationalQuery from '@/extensions/extendedRelationalQuery';
 import reset from '@/utils/reset';
 
-import DatabaseModels, { County, NoKey, Town, User } from '../../support/database/models';
+import DatabaseModels, {
+  CountyClass,
+  NoKeyClass,
+  NoTableClass,
+  TownClass,
+  UserClass,
+} from '../../support/database/models';
 import * as schema from '../../support/database/schema';
 import { TDatabase } from '../../support/database/types';
 
 const drizzleDb: TDatabase = drizzle(new Database('test.db'), { schema });
-const noKey = new NoKey({}, drizzleDb, schema, DatabaseModels);
-const user = new User({}, drizzleDb, schema, DatabaseModels);
-const town = new Town({}, drizzleDb, schema, DatabaseModels);
-const county = new County({}, drizzleDb, schema, DatabaseModels);
+const noKey = createEloquentModel(NoKeyClass, {}, drizzleDb, schema, DatabaseModels);
+const user = createEloquentModel(UserClass, {}, drizzleDb, schema, DatabaseModels);
+const town = createEloquentModel(TownClass, {}, drizzleDb, schema, DatabaseModels);
+const county = createEloquentModel(CountyClass, {}, drizzleDb, schema, DatabaseModels);
 
 beforeAll(async () => {
   // Extend the relational query
@@ -28,12 +35,10 @@ beforeAll(async () => {
   await migrate(drizzleDb, { migrationsFolder: resolve(__dirname, '../../support/database/migrations') });
 });
 
-class UnknownClass extends User {}
-
 describe('guessTable', () => {
   it('throws an error when attempting to guess a table that is not defined in the schema', () => {
-    const instantiateUnknown = () => new UnknownClass({}, drizzleDb, schema, DatabaseModels);
-    expect(instantiateUnknown).toThrowError(new Error('Unable to find entry in schema: unknownClassesTable'));
+    const instantiateUnknown = () => new NoTableClass({}, drizzleDb, schema, DatabaseModels);
+    expect(instantiateUnknown).toThrowError(new Error('Unable to find entry in schema: noTablesTable'));
   });
 });
 
@@ -74,7 +79,8 @@ describe('save', () => {
     const savedUser = await user.find(1);
     expect(savedUser?.id).toEqual(1);
     if (savedUser) {
-      savedUser.age = null;
+      // @ts-expect-error
+      savedUser.age = null; // Deliberate error; setting null against a number
       expect(savedUser.getChanges()).toEqual({ age: null });
       const saved = await savedUser.save();
       expect(saved).toEqual(false);
@@ -173,7 +179,8 @@ describe('setAttribute', () => {
   it("ignores properties which don't exist", () => {
     const newUser = user.factory({ name: 'John' });
     newUser.setAttribute('job', 'Director');
-    expect(newUser.job).toEqual(undefined);
+    // @ts-expect-error
+    expect(newUser.job).toEqual(undefined); // Deliberate error; `job` does not exist on the `UserClass`
   });
 });
 
@@ -194,7 +201,7 @@ describe('hydrate', () => {
     const userModels = user.hydrate(userObjects);
     expect(userModels.length).toEqual(2);
     userModels.forEach((userModel, index) => {
-      expect(userModel).toBeInstanceOf(User);
+      expect(userModel).toBeInstanceOf(UserClass);
       expect(userModel.getAttributes()).toEqual(userObjects[index]);
     });
   });
@@ -334,7 +341,7 @@ describe('relationships', () => {
       await aUser.save();
     }
     // With many
-    const savedUsers = await drizzleDb.query.usersTable
+    const savedUsers = collect(await drizzleDb.query.usersTable
       .findMany({
         with: {
           town: {
@@ -344,7 +351,7 @@ describe('relationships', () => {
           },
         },
       })
-      .hydrate(user);
+      .hydrate(user));
 
     expect(savedUsers.count()).toEqual(12);
 
@@ -354,10 +361,10 @@ describe('relationships', () => {
 
     const savedBrad = savedUsers.where('name', 'Brad').first();
     expect(savedBrad.name).toEqual('Brad');
-    expect(savedBrad.town.name).toEqual(poole.name); // Deep comparing the town may be cyclic
-    expect(savedBrad.town.county.name).toEqual(dorset.name); // Deep comparing the county may be cyclic
+    expect(savedBrad.town?.name).toEqual(poole.name); // Deep comparing the town may be cyclic
+    expect(savedBrad.town?.county?.name).toEqual(dorset.name); // Deep comparing the county may be cyclic
 
-    const savedCounties = await drizzleDb.query.countiesTable
+    const savedCounties = collect(await drizzleDb.query.countiesTable
       .findMany({
         with: {
           towns: {
@@ -367,14 +374,14 @@ describe('relationships', () => {
           },
         },
       })
-      .hydrate(county);
+      .hydrate(county));
 
     expect(savedCounties.count()).toEqual(3);
 
     const savedDorset = savedCounties.where('name', 'Dorset').first();
     expect(savedDorset.name).toEqual('Dorset');
-    expect(savedDorset.towns.length).toEqual(2);
-    expect(savedDorset.towns.map((town: Town) => town.name).join()).toEqual('Bournemouth,Poole');
+    expect(savedDorset.towns?.length).toEqual(2);
+    expect(savedDorset.towns?.map((town) => town.name).join()).toEqual('Bournemouth,Poole');
   });
 
   it('lazily loads One related model, via getAttribute', async () => {
@@ -460,8 +467,8 @@ describe('relationships', () => {
     expect(savedUsers.length).toEqual(2);
     const savedBrad = savedUsers.find(({ name }) => name === 'Brad');
     expect(savedBrad?.name).toEqual('Brad');
-    expect(savedBrad?.town.name).toEqual('Poole');
-    expect(savedBrad?.town.county.name).toEqual('Dorset');
+    expect(savedBrad?.town?.name).toEqual('Poole');
+    expect(savedBrad?.town?.county?.name).toEqual('Dorset');
   });
 
   it('eagerly loads Many related model(s)', async () => {
@@ -476,12 +483,20 @@ describe('relationships', () => {
     expect(savedCounties.count()).toEqual(2);
     const savedDorset = savedCounties.where('name', 'Dorset').first();
     expect(savedDorset.name).toEqual('Dorset');
-    expect(savedDorset.towns.length).toEqual(2);
+    expect(savedDorset.towns?.length).toEqual(2);
 
-    const savedBournemouth = collect(savedDorset.towns).where('name', 'Bournemouth').first() as Town;
-    expect(savedBournemouth.users.length).toEqual(2);
+    const savedBournemouth = collect(savedDorset.towns).where('name', 'Bournemouth').first();
+    expect(savedBournemouth.users?.length).toEqual(2);
 
-    const savedBen = collect(savedBournemouth.users).where('name', 'Ben').first() as User;
+    const savedBen = collect(savedBournemouth.users).where('name', 'Ben').first();
     expect(savedBen.name).toEqual('Ben');
+  });
+
+  it("throws an error when attempting to eagerly load a relation without it's parent", async () => {
+    const savedCounties = async () =>
+      collect(
+        await county.query().with('towns.users').whereIn(schema.countiesTable.name, ['Dorset', 'Powys']).hydrate()
+      );
+    await expect(savedCounties()).rejects.toThrowError(new Error('Parent relation (towns) is missing'));
   });
 });

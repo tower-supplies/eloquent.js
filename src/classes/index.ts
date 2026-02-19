@@ -1,3 +1,3 @@
-import Model from './Model';
+import EloquentModel, { createEloquentModel } from './EloquentModel';
 
-export { Model };
+export { createEloquentModel, EloquentModel };
