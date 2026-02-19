@@ -1,7 +1,7 @@
 import { eq, gt, gte, lt, lte, SQL } from 'drizzle-orm';
 import { SQLiteColumn } from 'drizzle-orm/sqlite-core';
 
-import { TWhereOperator } from '@/types';
+import { TWhereOperator } from '../types';
 
 type TWhereFunction = (column: SQLiteColumn, value: unknown) => SQL;
 
