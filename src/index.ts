@@ -1,7 +1,7 @@
 import { EloquentModel } from './classes';
 import { DatabaseProvider, useDatabaseContext } from './contexts';
-import { TDatabase, TSchema } from './types';
+import { TAttributes, TDatabase, TSchema } from './types';
 
-export { DatabaseProvider, EloquentModel, TDatabase, TSchema, useDatabaseContext };
+export { DatabaseProvider, EloquentModel, TAttributes, TDatabase, TSchema, useDatabaseContext };
 
 export default EloquentModel;
