@@ -1,5 +1,6 @@
 import collect, { Collection } from 'collect.js';
 import {
+  and,
   createTableRelationsHelpers,
   eq,
   extractTablesRelationalConfig,
@@ -9,6 +10,7 @@ import {
   One,
   Relation,
   Relations,
+  SQL,
 } from 'drizzle-orm';
 import { toCamelCase } from 'drizzle-orm/casing';
 import { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core';
@@ -124,7 +126,7 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
           //console.log(`Getting non-existent property '${stringName}'`);
           // Check if attribute exists
           const attributes = model.getAttributes();
-          const columns = getTableColumns(model.getTableDefinition());
+          const columns = model.getTableColumns();
           const relations = model.getTableRelations();
           if (
             Object.keys(attributes).includes(stringName) ||
@@ -143,7 +145,7 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
           //console.log(`Setting non-existent property '${stringName}', initial value: ${value}`);
           // Check if attribute exists
           const attributes = model.getAttributes();
-          const columns = getTableColumns(model.getTableDefinition());
+          const columns = model.getTableColumns();
           const relations = model.getTableRelations();
           if (
             Object.keys(attributes).includes(stringName) ||
@@ -278,7 +280,7 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
     const primaryKey = rawRow[tableName] ? rawRow[tableName][model.getKeyName()] : undefined;
 
     // Add row
-    if (typeof rows[primaryKey] === 'undefined') {
+    if (rows[primaryKey] === undefined) {
       rows[primaryKey] = rawRow[tableName];
     }
     const row: Record<string, any> = rows[primaryKey];
@@ -298,7 +300,7 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
 
           if (relation instanceof Many) {
             // Has Many
-            if (typeof row[relationName] === 'undefined') {
+            if (row[relationName] === undefined) {
               row[relationName] = {};
             }
             this.rowMapper(rawRow, modelInstance, relatedRelations, row[relationName]);
@@ -455,6 +457,14 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
   }
 
   /**
+   * Returns the table columns
+   * @returns {Record<string, SQLiteColumn<any, {}, {}>>}
+   */
+  getTableColumns(): Record<string, SQLiteColumn<any, {}, {}>> {
+    return getTableColumns(this.getTableDefinition());
+  }
+
+  /**
    * Returns the SQLite table definition
    * @returns {SQLiteTable}
    */
@@ -578,17 +588,29 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
   async delete(): Promise<boolean> {
     let success = false;
     const primaryKey = this.getKey();
+    let criteria: SQL | undefined;
     if (this._primaryKeyColumn && primaryKey) {
-      const { changes } = await this._database.delete(this._table).where(eq(this._primaryKeyColumn, primaryKey));
-      success = !!changes;
-      if (success) {
-        //console.log('Clearing primary keys');
-        const keyName = this.getKeyName();
-        if (keyName) {
-          delete this._attributes[keyName];
-        }
-        this.changed(DatabaseChangeType.DELETE, this);
+      // Delete based on primary key
+      criteria = eq(this._primaryKeyColumn, primaryKey);
+    } else {
+      // Delete based on matching fields (dangerous)
+      const columns = Object.values(this.getTableColumns());
+      criteria = and(
+        ...Object.entries(this._attributes).map(([key, value]): SQL | undefined => {
+          const column = columns.find(({ name }) => name === key);
+          return column ? eq(column, value) : undefined;
+        })
+      );
+    }
+    const { changes } = await this._database.delete(this._table).where(criteria);
+    success = !!changes;
+    if (success) {
+      //console.log('Clearing primary keys');
+      const keyName = this.getKeyName();
+      if (keyName) {
+        delete this._attributes[keyName];
       }
+      this.changed(DatabaseChangeType.DELETE, this);
     }
     return success;
   }

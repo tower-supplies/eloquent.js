@@ -1,9 +1,10 @@
-import { eq, inArray, Many, notInArray, One, Relation } from 'drizzle-orm';
+import { and, eq, inArray, Many, notInArray, One, or, Relation, SQL } from 'drizzle-orm';
 import { SQLiteColumn, SQLiteSelectBase } from 'drizzle-orm/sqlite-core';
 import { SQLiteRunResult } from 'expo-sqlite';
 
-import Model from '../classes/EloquentModel';
-import { TAttributes as Attributes, TDatabase } from '../types';
+import { EloquentModel } from '../classes';
+import { TAttributes as Attributes, TDatabase, TWhereOperator } from '../types';
+import whereCriteria from './whereCriteria';
 
 export type TSelectQuery<TAttributes> = SQLiteSelectBase<
   string,
@@ -18,12 +19,7 @@ export type TSelectQuery<TAttributes> = SQLiteSelectBase<
   Record<string, SQLiteColumn<any, {}, {}>>
 >;
 
-export interface TOperator {}
-
 export type TSelectQueryExtended<TAttributes, TModel> = {
-  // Original methods which need aliasing for reuse
-  _original_all: (placeholderValues: any) => TAttributes[];
-  _original_where: (where: any) => void;
   // Original methods which now return this type
   groupBy: (groupBy: any) => TSelectQueryExtended<TAttributes, TModel>;
   having: (having: any) => TSelectQueryExtended<TAttributes, TModel>;
@@ -31,22 +27,38 @@ export type TSelectQueryExtended<TAttributes, TModel> = {
   orderBy: (orderBy: any) => TSelectQueryExtended<TAttributes, TModel>;
   // New methods
   hydrate: () => Promise<TModel[]>;
-  where: (field: any, operator?: TOperator, value?: any) => TSelectQueryExtended<TAttributes, TModel>;
+  orWhere: (field: unknown, operator?: TWhereOperator, value?: any) => TSelectQueryExtended<TAttributes, TModel>;
+  where: (
+    field: unknown,
+    operator?: TWhereOperator,
+    value?: any,
+    and?: boolean
+  ) => TSelectQueryExtended<TAttributes, TModel>;
   whereIn: (field: SQLiteColumn, values: (number | string)[] | undefined) => TSelectQueryExtended<TAttributes, TModel>;
   whereNotIn: (
     field: SQLiteColumn,
     values: (number | string)[] | undefined
   ) => TSelectQueryExtended<TAttributes, TModel>;
   // Relations
-  withRelations: string[];
   with: (relationName: string) => TSelectQueryExtended<TAttributes, TModel>;
 } & TSelectQuery<TAttributes>;
 
-const extendSelectQuery = <T extends TDatabase, TAttributes extends Attributes, TModel extends Model<TAttributes, T>>(
+const extendSelectQuery = <
+  T extends TDatabase,
+  TAttributes extends Attributes,
+  TModel extends EloquentModel<TAttributes, T>,
+>(
   query: TSelectQuery<TAttributes>,
   model: TModel
 ): TSelectQueryExtended<TAttributes, TModel> => {
-  const extendedSelectQuery = query as TSelectQueryExtended<TAttributes, TModel>;
+  const extendedSelectQuery = query as TSelectQueryExtended<TAttributes, TModel> & {
+    // Original methods which need aliasing for reuse
+    _original_all: (placeholderValues: any) => TAttributes[];
+    _original_where: (where: any) => void;
+    // Properties which we don't need to expose
+    existingConditions: SQL | undefined;
+    withRelations: string[];
+  };
   extendedSelectQuery.withRelations = [];
 
   // Copy original methods, which we'll replace with our own implementations
@@ -77,24 +89,85 @@ const extendSelectQuery = <T extends TDatabase, TAttributes extends Attributes, 
   };
 
   /**
+   * `orWhere` helper
+   *
+   * @param {SQLiteColumn|string|function} field
+   * @param {WhereOperator|unknown} operator
+   * @param {unknown} value
+   * @returns {TQueryExtended<TAttributes>}
+   */
+  extendedSelectQuery.orWhere = (
+    field: unknown,
+    operator?: TWhereOperator | unknown,
+    value?: unknown
+  ): TSelectQueryExtended<TAttributes, TModel> => {
+    if (field instanceof SQLiteColumn || typeof field === 'string') {
+      // If value is not provided assume operator is the value and use equals
+      if (value === undefined && operator) {
+        return extendedSelectQuery.orWhere(field, '=', operator);
+      }
+
+      if (operator) {
+        return extendedSelectQuery.where(field, operator as TWhereOperator, value, false);
+      }
+    }
+
+    return extendedSelectQuery.where(field, undefined, value, false);
+  };
+
+  /**
    * `where` helper
    *
-   * @param {any} field
-   * @param {TOperator} operator
-   * @param {any} value
+   * @param {unknown} field
+   * @param {WhereOperator|unknown} operator
+   * @param {unknown} value
+   * @param {boolean} andConditions
    * @returns {TQueryExtended<TAttributes>}
    */
   extendedSelectQuery.where = (
-    field: any,
-    operator?: TOperator,
-    value?: any
+    field: unknown,
+    operator?: TWhereOperator | unknown,
+    value?: unknown,
+    andConditions = true
   ): TSelectQueryExtended<TAttributes, TModel> => {
     if (field instanceof SQLiteColumn || typeof field === 'string') {
-      console.log('Custom where implementation');
+      // If value is not provided assume operator is the value and use equals
+      if (value === undefined && operator) {
+        return extendedSelectQuery.where(field, '=', operator, !!andConditions);
+      }
+
+      const column =
+        field instanceof SQLiteColumn
+          ? field
+          : Object.values(model.getTableColumns()).find(({ name }) => name === field);
+      if (!column) {
+        throw new Error(`Unable to find column: ${field}`);
+      }
+
+      if (operator) {
+        const condition = whereCriteria(column, operator as TWhereOperator, value);
+        if (condition) {
+          const withExistingConditions = andConditions ? and : or;
+          extendedSelectQuery.existingConditions = extendedSelectQuery.existingConditions
+            ? withExistingConditions(extendedSelectQuery.existingConditions, condition)
+            : condition;
+        }
+        extendedSelectQuery._original_where(extendedSelectQuery.existingConditions);
+      }
     } else {
-      // Pass through directly to select query; Drizzle ORM format
-      extendedSelectQuery._original_where(field);
+      if (field instanceof SQL) {
+        const withExistingConditions = andConditions ? and : or;
+        extendedSelectQuery.existingConditions = extendedSelectQuery.existingConditions
+          ? withExistingConditions(extendedSelectQuery.existingConditions, field)
+          : field;
+
+        extendedSelectQuery._original_where(extendedSelectQuery.existingConditions);
+      } else {
+        // Pass through directly to select query; Drizzle ORM format
+        extendedSelectQuery._original_where(field);
+      }
     }
+
     return extendedSelectQuery;
   };
 

@@ -121,6 +121,11 @@ describe('find', () => {
     const savedUser = await user.find(1);
     expect(savedUser?.id).toEqual(1);
   });
+
+  it('returns null when find is used on a model without primary keys', async () => {
+    const result = await noKey.find(1);
+    expect(result).toEqual(null);
+  });
 });
 
 describe('getAttribute', () => {
@@ -250,6 +255,23 @@ describe('delete', () => {
     const deleted = await newUser.delete();
     expect(deleted).toEqual(true);
   });
+
+  it('is able to delete a model without a primary key', async () => {
+    const john = noKey.factory({ field: 'John', value: '51' });
+    const savedJohn = await john.save();
+    expect(savedJohn).toEqual(true);
+
+    const jim = noKey.factory({ field: 'Jim', value: '53' });
+    const savedJim = await jim.save();
+    expect(savedJim).toEqual(true);
+
+    const deletedJohn = await john.delete();
+    expect(deletedJohn).toEqual(true);
+
+    const remainingJim = await noKey.query().where(eq(schema.noKeysTable.field, 'Jim'));
+    expect(remainingJim.length).toEqual(1);
+    expect(remainingJim[0].value).toEqual('53');
+  });
 });
 
 describe('query (select)', () => {
@@ -289,7 +311,85 @@ describe('query (select)', () => {
     expect(queryWithoutCriteria.length).toEqual(2);
   });
 
-  it('groupBy, having and limit passed through to the select query but retain extended functionality', async () => {
+  describe('has a where method which supports alternative syntax', async () => {
+    it('supports where with only two parameters and infers it as equals', async () => {
+      const savedUsers = await user.query().where('name', 'John');
+      expect(savedUsers.length).toEqual(1);
+      const savedUser = savedUsers[0];
+      expect(savedUser.name).toEqual('John');
+    });
+
+    it('supports equals (=)', async () => {
+      const savedUsers = await user.query().where('name', '=', 'John');
+      expect(savedUsers.length).toEqual(1);
+      const savedUser = savedUsers[0];
+      expect(savedUser.name).toEqual('John');
+    });
+
+    it('supports less than (<)', async () => {
+      const savedUsers = await user.query().where('age', '<', 32);
+      expect(savedUsers.length).toEqual(0);
+    });
+
+    it('supports less than or equal to (<=)', async () => {
+      const savedUsers = await user.query().where('age', '<=', 32);
+      expect(savedUsers.length).toEqual(1);
+      const savedUser = savedUsers[0];
+      expect(savedUser.name).toEqual('Jimmy');
+    });
+
+    it('supports greater than (>)', async () => {
+      const savedUsers = await user.query().where('age', '>', 43);
+      expect(savedUsers.length).toEqual(0);
+    });
+
+    it('supports greater than or equal to (>=)', async () => {
+      const savedUsers = await user.query().where('age', '>=', 43);
+      expect(savedUsers.length).toEqual(1);
+      const savedUser = savedUsers[0];
+      expect(savedUser.name).toEqual('John');
+    });
+
+    it('supports multiple wheres, as AND by default', async () => {
+      let savedUsers = await user.query().where('age', '>=', 43).where('name', 'Jimmy');
+      expect(savedUsers.length).toEqual(0);
+
+      savedUsers = await user.query().where('age', '>=', 43).where('name', 'John');
+      expect(savedUsers.length).toEqual(1);
+    });
+
+    it('supports orWhere with alternative where syntax', async () => {
+      const savedUsers = await user.query().where('age', '>=', 43).orWhere('name', 'Jimmy');
+      expect(savedUsers.length).toEqual(2);
+    });
+
+    it('supports orWhere with original where syntax', async () => {
+      const savedUsers = await user.query().where('age', '>=', 43).orWhere(eq(schema.usersTable.name, 'Jimmy'));
+      expect(savedUsers.length).toEqual(2);
+    });
+
+    it('does nothing when there are insufficient parameters passed to where', async () => {
+      const savedUsers = await user.query().where('age');
+      expect(savedUsers.length).toEqual(2);
+    });
+
+    it('does nothing when there are insufficient parameters passed to orWhere', async () => {
+      const savedUsers = await user.query().orWhere('age');
+      expect(savedUsers.length).toEqual(2);
+    });
+
+    it('throws an error when an invalid field is supplied', async () => {
+      const invalidWhere = async () => await user.query().where('noExistentField', '>=', 43);
+      await expect(invalidWhere()).rejects.toThrowError(new Error('Unable to find column: noExistentField'));
+    });
+
+    it('throws an error when an invalid operator is supplied', async () => {
+      const invalidWhere = async () => await user.query().where('age', 'boom', 43);
+      await expect(invalidWhere()).rejects.toThrowError(new Error('Unsupported where operator: boom'));
+    });
+  });
+
+  it('supports groupBy, having and limit passed, whilst retaining the extended functionality', async () => {
     const savedUsers = await user
       .query()
       .groupBy(schema.usersTable.name)
@@ -303,7 +403,7 @@ describe('query (select)', () => {
 });
 
 describe('relationships', () => {
-  it('supports nested hasOne and hasMany relations, via RelationalQuery', async () => {
+  it('are supported via RelationalQuery', async () => {
     // Create counties
     const dorset = county.factory({ name: 'Dorset' });
     const leicestershire = county.factory({ name: 'Leicestershire ' });
@@ -340,18 +440,21 @@ describe('relationships', () => {
     for (const aUser of users) {
       await aUser.save();
     }
-    // With many
-    const savedUsers = collect(await drizzleDb.query.usersTable
-      .findMany({
-        with: {
-          town: {
-            with: {
-              county: true,
+
+    // One
+    const savedUsers = collect(
+      await drizzleDb.query.usersTable
+        .findMany({
+          with: {
+            town: {
+              with: {
+                county: true,
+              },
             },
           },
-        },
-      })
-      .hydrate(user));
+        })
+        .hydrate(user)
+    );
 
     expect(savedUsers.count()).toEqual(12);
 
@@ -364,17 +467,20 @@ describe('relationships', () => {
     expect(savedBrad.town?.name).toEqual(poole.name); // Deep comparing the town may be cyclic
     expect(savedBrad.town?.county?.name).toEqual(dorset.name); // Deep comparing the county may be cyclic
 
-    const savedCounties = collect(await drizzleDb.query.countiesTable
-      .findMany({
-        with: {
-          towns: {
-            with: {
-              users: true,
+    // Many
+    const savedCounties = collect(
+      await drizzleDb.query.countiesTable
+        .findMany({
+          with: {
+            towns: {
+              with: {
+                users: true,
+              },
             },
           },
-        },
-      })
-      .hydrate(county));
+        })
+        .hydrate(county)
+    );
 
     expect(savedCounties.count()).toEqual(3);
 
@@ -490,6 +596,20 @@ describe('relationships', () => {
 
     const savedBen = collect(savedBournemouth.users).where('name', 'Ben').first();
     expect(savedBen.name).toEqual('Ben');
+  });
+
+  it("ignores trailing '.' when using with", async () => {
+    const savedCounties = collect(
+      await county
+        .query()
+        .with('towns')
+        .with('towns.')
+        .whereIn(schema.countiesTable.name, ['Dorset', 'Powys'])
+        .hydrate()
+    );
+    expect(savedCounties.count()).toEqual(2);
+    const savedDorset = savedCounties.where('name', 'Dorset').first();
+    expect(savedDorset.name).toEqual('Dorset');
   });
 
   it("throws an error when attempting to eagerly load a relation without it's parent", async () => {

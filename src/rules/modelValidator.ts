@@ -3,7 +3,7 @@ import collect from 'collect.js';
 import { SQLiteColumn, SQLiteInteger, SQLiteText } from 'drizzle-orm/sqlite-core';
 
 import Model from '../classes/EloquentModel';
-import { TDatabase } from '../types';
+import { TAttributes as Attributes, TDatabase as Database } from '../types';
 import en from './lang/en';
 
 /**
@@ -32,7 +32,7 @@ export const addRules = (
     const isArray = Array.isArray(rule);
     const isString = typeof rule === 'string';
 
-    if (typeof existingRules[key] === 'undefined') {
+    if (existingRules[key] === undefined) {
       // New key
       existingRules[key] = rule;
     } else if (typeof existingRules[key] === 'string') {
@@ -79,7 +79,9 @@ type TSQLiteColumn = SQLiteColumn & {
  * @param {Model} model
  * @returns {Rules}
  */
-export const modelRules = <TAttributes, T extends TDatabase>(model: Model<TAttributes, T>): Rules => {
+export const modelRules = <TAttributes extends Attributes, TDatabase extends Database>(
+  model: Model<TAttributes, TDatabase>
+): Rules => {
   const columnTypes = collect(columnTypeMappings);
   const rules: Rules = {};
 
@@ -111,8 +113,8 @@ export const modelRules = <TAttributes, T extends TDatabase>(model: Model<TAttri
  * @param {ErrorMessages} customErrorMessages
  * @returns
  */
-const modelValidator = <TAttributes, T extends TDatabase>(
-  model: Model<TAttributes, T>,
+const modelValidator = <TAttributes extends Attributes, TDatabase extends Database>(
+  model: Model<TAttributes, TDatabase>,
   rules: Rules = {},
   customErrorMessages: ErrorMessages = {}
 ) => {

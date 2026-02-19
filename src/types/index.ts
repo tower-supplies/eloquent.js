@@ -1,3 +1,4 @@
+import { TWhereOperator } from '../enums/WhereOperator';
 import { TDatabase, TErrorHandler, TMigrations, TSchema, TSeeder } from './Database';
 import { TAttributes, TDatabaseModels, TModel, TModelType, TModels, TOnChangeModel } from './Models';
 
@@ -13,4 +14,5 @@ export {
   TOnChangeModel,
   TSchema,
   TSeeder,
+  TWhereOperator,
 };

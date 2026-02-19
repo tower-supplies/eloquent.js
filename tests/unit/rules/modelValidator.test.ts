@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest';
 
 import { addRules, modelRules } from '@/rules/modelValidator';
 
-import DatabaseModels, { User } from '../../support/database/models';
+import { createEloquentModel } from '@/classes';
+import DatabaseModels, { UserClass } from '../../support/database/models';
 import * as schema from '../../support/database/schema';
 import { TDatabase } from '../../support/database/types';
 
@@ -69,7 +70,7 @@ describe('addRules', () => {
 
 describe('modelRules', () => {
   it('adds "required" to properties that are: not nullable, have no default and are not autoincrement keys', () => {
-    const user = new User({}, drizzleDb, schema, DatabaseModels);
+    const user = createEloquentModel(UserClass, {}, drizzleDb, schema, DatabaseModels);
     const rules = modelRules(user);
 
     expect(rules.id).toEqual('integer'); // Autoincrement primary key, should not be required
