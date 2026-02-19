@@ -1,4 +1,5 @@
 import EloquentModel from './EloquentModel';
+import Town from './Town';
 
 export interface TUser {
   id: number;
@@ -6,6 +7,7 @@ export interface TUser {
   age: number;
   email: string;
   town_id?: number;
+  town?: Town;
 }
 
 export default class User extends EloquentModel<TUser> {}

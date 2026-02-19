@@ -1,5 +1,15 @@
 import collect, { Collection } from 'collect.js';
-import { eq, getTableColumns, Relations } from 'drizzle-orm';
+import {
+  createTableRelationsHelpers,
+  eq,
+  extractTablesRelationalConfig,
+  getTableColumns,
+  getTableName,
+  Many,
+  One,
+  Relation,
+  Relations,
+} from 'drizzle-orm';
 import { toCamelCase } from 'drizzle-orm/casing';
 import { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core';
 import { deepEqual } from 'fast-equals';
@@ -8,7 +18,7 @@ import Pluralize from 'pluralize';
 import DatabaseChangeType from '../enums/DatabaseChangeType';
 import extendSelectQuery, { TSelectQuery, TSelectQueryExtended } from '../extensions/extendedSelectQuery';
 import { modelValidator } from '../rules';
-import { TDatabase, TDatabaseModels, TOnChangeModel, TSchema } from '../types';
+import { TAttributes as Attributes, TDatabase, TDatabaseModels, TModelType, TOnChangeModel, TSchema } from '../types';
 import { ucfirst } from '../utils';
 
 /**
@@ -32,7 +42,7 @@ function setProperty<T extends object, K extends PropertyKey, V extends K extend
   (object as any)[key] = value;
 }
 
-export default class Model<TAttributes, T extends TDatabase> {
+export default class Model<TAttributes extends Attributes, T extends TDatabase> {
   // Declare property types
   protected _database: T;
   protected _models: TDatabaseModels | undefined = undefined;
@@ -117,7 +127,12 @@ export default class Model<TAttributes, T extends TDatabase> {
           // Check if attribute exists
           const attributes = model.getAttributes();
           const columns = getTableColumns(model.getTableDefinition());
-          if (Object.keys(attributes).includes(stringName) || Object.keys(columns).includes(stringName)) {
+          const relations = model.getTableRelations();
+          if (
+            Object.keys(attributes).includes(stringName) ||
+            Object.keys(columns).includes(stringName) ||
+            Object.keys(relations).includes(stringName)
+          ) {
             //console.log(`Returning attribute '${stringName}': ${attributes[stringName]}`);
             return model.getAttribute(stringName as keyof TAttributes);
           }
@@ -131,7 +146,12 @@ export default class Model<TAttributes, T extends TDatabase> {
           // Check if attribute exists
           const attributes = model.getAttributes();
           const columns = getTableColumns(model.getTableDefinition());
-          if (Object.keys(attributes).includes(stringName) || Object.keys(columns).includes(stringName)) {
+          const relations = model.getTableRelations();
+          if (
+            Object.keys(attributes).includes(stringName) ||
+            Object.keys(columns).includes(stringName) ||
+            Object.keys(relations).includes(stringName)
+          ) {
             //console.log(`Setting attribute '${stringName}': ${attributes[stringName]} => ${value}`);
             return model.setAttribute(stringName, value);
           }
@@ -180,13 +200,199 @@ export default class Model<TAttributes, T extends TDatabase> {
   }
 
   /**
+   *
+   * @param rawRows
+   * @param withRelations
+   * @returns
+   */
+  relationalRowMapper(rawRows: Record<string, any>, withRelations: string[]): TAttributes[] {
+    /*
+    // Originally it looked like using the relational query might be easier, but it actually ended up seeming longer
+    // and/or convoluted than using a custom implementation
+    const { tables, tableNamesMap } = extractTablesRelationalConfig(this._schema, createTableRelationsHelpers);
+    const tableConfig: TableRelationalConfig | undefined = Object.values(tables)
+      .find(({ dbName }) => dbName === this.getTableName());
+
+    if (tableConfig) { 
+      const selectionEntries = Object.entries(tableConfig.columns);
+      const selection = selectionEntries.map(([key, value]) => ({
+        dbKey: value.name,
+        tsKey: key,
+        field: aliasedTableColumn(value, 'users'), // aliasedTableColumn(value, tableAlias),
+        relationTableTsKey: void 0,
+        isJson: false,
+        selection: []
+      }));
+
+      const rows = rawRows.map((row) => mapRelationalRow(tables, tableConfig, row, selection));
+      console.log(rows);
+      if (this.queryMode === "first") {
+        return rows[0];
+      }
+      return rows;
+    }
+    */
+
+    // Iterate over each of the raw rows with the row mapper
+    //const rows = {} as Record<string, TAttributes[]>;
+    //const rows = [] as TAttributes[];
+    const rows: Record<string, TAttributes> = {};
+    rawRows.forEach((rawRow: any) => {
+      this.rowMapper(rawRow, this, withRelations, rows);
+    });
+    return this.flatten(Object.values(rows), this);
+  }
+
+  protected flatten<TRowModel extends TDatabaseModels>(rows: TAttributes[], model: TRowModel) {
+    const tableRelations = Object.entries(model.getTableRelations());
+    return rows.map((row) => {
+      Object.entries(row).forEach(([key, value]) => {
+        const tableRelation = tableRelations.find(([relationName]) => relationName === key);
+        if (tableRelation) {
+          const [, relation] = tableRelation;
+          if (relation instanceof Many) {
+            row = {
+              ...row,
+              [key]: this.flatten(Object.values(value), model.getRelatedModel(key, true)),
+            };
+          }
+        }
+      });
+      return row;
+    });
+  }
+
+  /**
+   * Maps the objects from the rawRow to the relevant hierarchy in a row
+   * @param {any} rawRow
+   * @param {TRowModel extends TDatabaseModels} model
+   * @param {string[]} withRelations
+   * @returns
+   */
+  protected rowMapper<TRowModel extends TDatabaseModels>(
+    rawRow: any,
+    model: TRowModel,
+    withRelations: string[],
+    rows: Record<string, any>
+  ) {
+    const tableName = model.getTableName();
+    const tableRelations = Object.entries(model.getTableRelations());
+    const primaryKey = rawRow[tableName] ? rawRow[tableName][model.getKeyName()] : undefined;
+
+    // Add row
+    if (typeof rows[primaryKey] === 'undefined') {
+      rows[primaryKey] = rawRow[tableName];
+    }
+    const row: Record<string, any> = rows[primaryKey];
+
+    // Add relations to row
+    if (row) {
+      tableRelations.forEach(([relationName, relation]) => {
+        const modelInstance = model.getRelatedModel(relationName, true);
+        if (modelInstance && withRelations.includes(relationName)) {
+          const regex = new RegExp(`^${relationName}.(.*)`);
+          const relatedRelations = withRelations
+            .map((relation: string): string | null => {
+              const matches = relation.match(regex);
+              return matches?.length ? matches[1] : null;
+            })
+            .filter((relation) => !!relation) as string[];
+
+          if (relation instanceof Many) {
+            // Has Many
+            if (typeof row[relationName] === 'undefined') {
+              row[relationName] = {};
+            }
+            this.rowMapper(rawRow, modelInstance, relatedRelations, row[relationName]);
+          } else if (relation instanceof One) {
+            // Has One
+            const relation = this.rowMapper(rawRow, modelInstance, relatedRelations, {});
+            row[relationName] = relation ?? undefined;
+          }
+        }
+      });
+    }
+
+    return row;
+  }
+
+  /**
    * Returns a specific attribute for the given instance
    * @param {keyof TAttributes} key
    * @param {any} fallback
    * @returns {any}
    */
   getAttribute(key: keyof TAttributes, fallback: any = undefined): any {
-    return this._attributes[key] ?? fallback;
+    if (this._attributes[key]) {
+      return this._attributes[key];
+    }
+
+    const relationPromise = this.lazyLoadRelation(key); // Lazy-load relation where applicable, see below
+    if (relationPromise instanceof Promise) {
+      return relationPromise;
+    }
+
+    return fallback;
+  }
+
+  /**
+   * Returns a Promise of the related model(s)
+   * @param {keyof TAttributes} key
+   * @returns {Promise<any>|undefined}
+   */
+  protected lazyLoadRelation(key: keyof TAttributes): Promise<any> | undefined {
+    // Check if relation and associated model exist
+    const relationName = key as string;
+    const relation = this.getTableRelation(relationName);
+    const modelInstance = this.getRelatedModel(relationName, true);
+    if (relation && modelInstance) {
+      let criteria: any[] = [];
+      let singular = false;
+
+      // Attempt to lazy load relation
+      if (relation instanceof Many) {
+        // Find the inverse relation so we know which field to use
+        const modelRelations: Record<string, Relation<string>> = modelInstance.getTableRelations();
+        const inverseRelation = Object.values(modelRelations).find(
+          ({ referencedTable }) => referencedTable === this.getTableDefinition()
+        );
+        if (inverseRelation && inverseRelation instanceof One && inverseRelation.config) {
+          const { fields, references } = inverseRelation.config;
+          criteria = references
+            .map((reference, index) => {
+              const value = this._attributes[reference.name as keyof TAttributes];
+              return value ? eq(fields[index], value) : null;
+            })
+            .filter((criteria) => criteria);
+        }
+      } else if (relation instanceof One && relation.config) {
+        singular = true;
+        const { fields, references } = relation.config;
+        criteria = fields
+          .map((field, index) => {
+            const value = this._attributes[field.name as keyof TAttributes];
+            return value ? eq(references[index], value) : null;
+          })
+          .filter((criteria) => criteria);
+      }
+
+      if (criteria.length) {
+        // Return the promise to fetch and hydrate the relation
+        return modelInstance
+          .query()
+          .where(criteria)
+          .then((rows: TModelType<typeof modelInstance>[]): any => {
+            if (singular) {
+              this.setAttribute(relationName, rows[0]);
+            } else {
+              this.setAttribute(relationName, rows);
+            }
+            return this._attributes[key];
+          });
+      }
+
+      return undefined;
+    }
   }
 
   /**
@@ -236,6 +442,21 @@ export default class Model<TAttributes, T extends TDatabase> {
   }
 
   /**
+   * Returns the model associated with the given relation
+   * @param {string} relationName
+   * @param {boolean} instance
+   * @returns
+   */
+  getRelatedModel(relationName: string, instance = false) {
+    const relatedModel = ucfirst(Pluralize.singular(relationName));
+    const model = this._models?.[relatedModel];
+    if (instance && model) {
+      return new model({}, this._database, this._schema, this._models, this._onChange);
+    }
+    return model;
+  }
+
+  /**
    * Returns the SQLite table definition
    * @returns {SQLiteTable}
    */
@@ -243,14 +464,37 @@ export default class Model<TAttributes, T extends TDatabase> {
     return this._table;
   }
 
-  getTableRelations(): Relations | undefined {
-    let relations: Relations | undefined = undefined;
-    Object.entries(this._schema).forEach(([, entry]: [string, SQLiteTable | Relations]) => {
-      if (entry instanceof Relations && entry.table === this.getTableDefinition()) {
-        relations = entry;
-      }
-    });
-    return relations;
+  /**
+   * Returns the table name
+   * @returns {string}
+   */
+  getTableName(): string {
+    return getTableName(this._table);
+  }
+
+  /**
+   * Returns the relation definitions for the current model
+   * @returns {Record<string, Relation<string>>}
+   */
+  getTableRelations(): Record<string, Relation<string>> {
+    const { tables } = extractTablesRelationalConfig(this._schema, createTableRelationsHelpers);
+
+    const table = Object.values(tables).find(({ dbName }) => dbName === this.getTableName());
+    if (table?.relations) {
+      //console.log(table.relations);
+      return table.relations;
+    }
+
+    return {};
+  }
+
+  /**
+   * Returns the relation
+   * @returns {Relation<string>|undefined}
+   */
+  getTableRelation(relationName: string): Relation<string> | undefined {
+    const relations = this.getTableRelations();
+    return relations[relationName] ?? undefined;
   }
 
   /**
@@ -275,28 +519,20 @@ export default class Model<TAttributes, T extends TDatabase> {
       }
     }
 
-    // Check if key exists in relations
-    const relations = this.getTableRelations();
-    if (relations) {
-      // Table names are plural (e.g. itemsTable, productsTable)
-      const relatedTable = `${Pluralize(key)}Table`;
-      // Model names are singular PascalCase (e.g. Scan, ScanLocation)
-      const relatedModel = ucfirst(Pluralize.singular(key));
-      // Check if table and model exist
-      if (this._schema[relatedTable] && this._models?.[relatedModel]) {
-        //console.log(`Relation: ${key} => ${relatedModel} (${relatedTable})`, value);
-        const model = this._models[relatedModel];
-        const property = Array.isArray(value)
-          ? value.map((entry) =>
-              entry
-                ? new model(entry, this._database, this._schema, this._models, relatedModel, this._onChange)
-                : undefined
-            )
-          : value
-            ? new model(value, this._database, this._schema, this._models, relatedModel, this._onChange)
-            : undefined;
-        setProperty(this._attributes, key, property);
-      }
+    const relationName = key as string;
+    const relation = this.getTableRelation(relationName);
+    const model = this.getRelatedModel(relationName);
+    // Check if relation and model exist
+    if (relation && model) {
+      //console.log(`Relation: ${key} => ${model}`, value);
+      const property = Array.isArray(value)
+        ? value.map((entry) =>
+            entry ? new model(entry, this._database, this._schema, this._models, this._onChange) : undefined
+          )
+        : value
+          ? new model(value, this._database, this._schema, this._models, this._onChange)
+          : undefined;
+      setProperty(this._attributes, key, property);
     }
 
     // No change made

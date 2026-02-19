@@ -1,7 +1,8 @@
 import { TDatabase, TErrorHandler, TMigrations, TSchema, TSeeder } from './Database';
-import { TDatabaseModels, TModel, TModelType, TModels, TOnChangeModel } from './Models';
+import { TAttributes, TDatabaseModels, TModel, TModelType, TModels, TOnChangeModel } from './Models';
 
 export {
+  TAttributes,
   TDatabase,
   TDatabaseModels,
   TErrorHandler,

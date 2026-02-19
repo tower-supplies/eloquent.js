@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3';
 import collect from 'collect.js';
+import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { resolve } from 'path';
@@ -117,7 +118,7 @@ describe('find', () => {
 });
 
 describe('getAttribute', () => {
-  it('returns the property of a model', () => {
+  it('returns the property of a model', async () => {
     const newUser = user.factory({ name: 'John' });
     expect(newUser.getAttribute('name')).toEqual('John');
   });
@@ -250,8 +251,8 @@ describe('query (select)', () => {
     expect(query.hydrate).toBeTypeOf('function');
 
     const users = await user.query().hydrate();
-    expect(users.count()).toEqual(2);
-    const savedUser = users.first();
+    expect(users.length).toEqual(2);
+    const savedUser = users[0];
     expect(savedUser.name).toEqual('John');
   });
 
@@ -260,8 +261,8 @@ describe('query (select)', () => {
     expect(query.whereIn).toBeTypeOf('function');
 
     const users = await user.query().whereIn(schema.usersTable.name, ['John']).hydrate();
-    expect(users.count()).toEqual(1);
-    const savedUser = users.first();
+    expect(users.length).toEqual(1);
+    const savedUser = users[0];
     expect(savedUser.name).toEqual('John');
 
     const queryWithoutCriteria = await user.query().whereIn(schema.usersTable.name, []);
@@ -273,17 +274,29 @@ describe('query (select)', () => {
     expect(query.whereIn).toBeTypeOf('function');
 
     const users = await user.query().whereNotIn(schema.usersTable.name, ['John']).hydrate();
-    expect(users.count()).toEqual(1);
-    const savedUser = users.first();
+    expect(users.length).toEqual(1);
+    const savedUser = users[0];
     expect(savedUser.name).toEqual('Jimmy');
 
     const queryWithoutCriteria = await user.query().whereNotIn(schema.usersTable.name, []);
     expect(queryWithoutCriteria.length).toEqual(2);
   });
+
+  it('groupBy, having and limit passed through to the select query but retain extended functionality', async () => {
+    const savedUsers = await user
+      .query()
+      .groupBy(schema.usersTable.name)
+      .having(eq(schema.usersTable.name, 'John'))
+      .limit(1)
+      .hydrate();
+    expect(savedUsers.length).toEqual(1);
+    const savedUser = savedUsers[0];
+    expect(savedUser.name).toEqual('John');
+  });
 });
 
 describe('relationships', () => {
-  it('supports nested hasOne and hasMany relations', async () => {
+  it('supports nested hasOne and hasMany relations, via RelationalQuery', async () => {
     // Create counties
     const dorset = county.factory({ name: 'Dorset' });
     const leicestershire = county.factory({ name: 'Leicestershire ' });
@@ -362,5 +375,113 @@ describe('relationships', () => {
     expect(savedDorset.name).toEqual('Dorset');
     expect(savedDorset.towns.length).toEqual(2);
     expect(savedDorset.towns.map((town: Town) => town.name).join()).toEqual('Bournemouth,Poole');
+  });
+
+  it('lazily loads One related model, via getAttribute', async () => {
+    const savedUsers = user.hydrate(await user.query().where(eq(schema.usersTable.name, 'Brad')));
+    expect(savedUsers.length).toEqual(1);
+    const savedBrad = savedUsers[0];
+    expect(savedBrad.name).toEqual('Brad');
+
+    const savedTowns = town.hydrate(await town.query().where(eq(schema.townsTable.name, 'Poole')));
+    expect(savedTowns.length).toEqual(1);
+    const savedPoole = savedTowns[0];
+    expect(savedPoole.name).toEqual('Poole');
+
+    if (savedBrad && savedPoole) {
+      // Lazy relations are initially returned as a function
+      expect(savedBrad.getAttribute('town')).toBeInstanceOf(Promise);
+      expect(await savedBrad.getAttribute('town')).toEqual(savedPoole);
+      expect(savedBrad.getAttribute('town')).toEqual(savedPoole); // 2nd time it is already populated
+    }
+  });
+
+  it('lazily loads One related model, via direct access', async () => {
+    const savedUsers = await user.query().where(eq(schema.usersTable.name, 'Brad')).hydrate();
+    expect(savedUsers.length).toEqual(1);
+    const savedBrad = savedUsers[0];
+    expect(savedBrad.name).toEqual('Brad');
+
+    const savedTowns = await town.query().where(eq(schema.townsTable.name, 'Poole')).hydrate();
+    expect(savedTowns.length).toEqual(1);
+    const savedPoole = savedTowns[0];
+    expect(savedPoole.name).toEqual('Poole');
+
+    if (savedBrad && savedPoole) {
+      // Lazy relations are initially returned as a function
+      expect(savedBrad.town).toBeInstanceOf(Promise);
+      expect(await savedBrad.town).toEqual(savedPoole);
+      expect(savedBrad.town).toEqual(savedPoole); // 2nd time it is already populated
+    }
+  });
+
+  it('lazily loads Many related model(s), via getAttribute', async () => {
+    const savedCounties = await county.query().where(eq(schema.countiesTable.name, 'Dorset')).hydrate();
+    expect(savedCounties.length).toEqual(1);
+    const savedDorset = savedCounties[0];
+    expect(savedDorset.name).toEqual('Dorset');
+
+    const savedTowns = await town.query().where(eq(schema.townsTable.county_id, savedDorset.id)).hydrate();
+    expect(savedTowns.length).toEqual(2);
+
+    if (savedDorset && savedTowns) {
+      // Lazy relations are initially returned as a function
+      expect(savedDorset.getAttribute('towns')).toBeInstanceOf(Promise);
+      expect(await savedDorset.getAttribute('towns')).toEqual(savedTowns);
+      expect(savedDorset.getAttribute('towns')).toEqual(savedTowns); // 2nd time it is already populated
+    }
+  });
+
+  it('lazily loads Many related model(s), via direct access', async () => {
+    const savedCounties = await county.query().where(eq(schema.countiesTable.name, 'Dorset')).hydrate();
+    expect(savedCounties.length).toEqual(1);
+    const savedDorset = savedCounties[0];
+    expect(savedDorset.name).toEqual('Dorset');
+
+    const savedTowns = await town.query().where(eq(schema.townsTable.county_id, savedDorset.id)).hydrate();
+    expect(savedTowns.length).toEqual(2);
+
+    if (savedDorset && savedTowns) {
+      // Lazy relations are initially returned as a function
+      expect(savedDorset.towns).toBeInstanceOf(Promise);
+      expect(await savedDorset.towns).toEqual(savedTowns);
+      expect(savedDorset.towns).toEqual(savedTowns); // 2nd time it is already populated
+    }
+  });
+
+  it('eagerly loads One related model', async () => {
+    const savedUsers = await user
+      .query()
+      .with('town')
+      .with('town.county')
+      .whereIn(schema.usersTable.name, ['John', 'Brad'])
+      .hydrate();
+
+    expect(savedUsers.length).toEqual(2);
+    const savedBrad = savedUsers.find(({ name }) => name === 'Brad');
+    expect(savedBrad?.name).toEqual('Brad');
+    expect(savedBrad?.town.name).toEqual('Poole');
+    expect(savedBrad?.town.county.name).toEqual('Dorset');
+  });
+
+  it('eagerly loads Many related model(s)', async () => {
+    const savedCounties = collect(
+      await county
+        .query()
+        .with('towns')
+        .with('towns.users')
+        .whereIn(schema.countiesTable.name, ['Dorset', 'Powys'])
+        .hydrate()
+    );
+    expect(savedCounties.count()).toEqual(2);
+    const savedDorset = savedCounties.where('name', 'Dorset').first();
+    expect(savedDorset.name).toEqual('Dorset');
+    expect(savedDorset.towns.length).toEqual(2);
+
+    const savedBournemouth = collect(savedDorset.towns).where('name', 'Bournemouth').first() as Town;
+    expect(savedBournemouth.users.length).toEqual(2);
+
+    const savedBen = collect(savedBournemouth.users).where('name', 'Ben').first() as User;
+    expect(savedBen.name).toEqual('Ben');
   });
 });
