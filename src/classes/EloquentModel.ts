@@ -246,24 +246,26 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
   protected flatten<TRowModel extends TDatabaseModels>(rows: TAttributes[], model: TRowModel) {
     const tableRelations = Object.entries(model.getTableRelations());
     return rows.map((row) => {
-      Object.entries(row).forEach(([key, value]) => {
-        const tableRelation = tableRelations.find(([relationName]) => relationName === key);
-        if (tableRelation) {
-          const [, relation] = tableRelation;
-          if (relation instanceof Many) {
-            row = {
-              ...row,
-              [key]: this.flatten(Object.values(value), model.getRelatedModel(key)),
-            };
+      if (row) {
+        Object.entries(row).forEach(([key, value]) => {
+          const tableRelation = tableRelations.find(([relationName]) => relationName === key);
+          if (tableRelation) {
+            const [, relation] = tableRelation;
+            if (relation instanceof Many) {
+              row = {
+                ...row,
+                [key]: this.flatten(Object.values(value), model.getRelatedModel(key)),
+              };
+            }
+            if (relation instanceof One) {
+              row = {
+                ...row,
+                [key]: this.flatten([value], model.getRelatedModel(key))[0],
+              };
+            }
           }
-          if (relation instanceof One && value !== undefined) {
-            row = {
-              ...row,
-              [key]: this.flatten([value], model.getRelatedModel(key))[0],
-            };
-          }
-        }
-      });
+        });
+      }
       return row;
     });
   }
