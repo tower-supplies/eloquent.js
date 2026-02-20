@@ -253,7 +253,7 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
           if (relation instanceof Many) {
             row = {
               ...row,
-              [key]: this.flatten(Object.values(value), model.getRelatedModel(key, true)),
+              [key]: this.flatten(Object.values(value), model.getRelatedModel(key)),
             };
           }
         }
@@ -288,7 +288,7 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
     // Add relations to row
     if (row) {
       tableRelations.forEach(([relationName, relation]) => {
-        const modelInstance = model.getRelatedModel(relationName, true);
+        const modelInstance = model.getRelatedModel(relationName);
         if (modelInstance && withRelations.includes(relationName)) {
           const regex = new RegExp(`^${relationName}.(.*)`);
           const relatedRelations = withRelations
@@ -344,7 +344,7 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
     // Check if relation and associated model exist
     const relationName = key as string;
     const relation = this.getTableRelation(relationName);
-    const modelInstance = this.getRelatedModel(relationName, true);
+    const modelInstance = this.getRelatedModel(relationName);
     if (relation && modelInstance) {
       let criteria: any[] = [];
       let singular = false;
@@ -383,9 +383,9 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
           .where(criteria)
           .then((rows: TModelType<typeof modelInstance>[]): any => {
             if (singular) {
-              this.setAttribute(relationName, rows[0]);
+              this.setAttribute(relationName, rows[0] as any);
             } else {
-              this.setAttribute(relationName, rows);
+              this.setAttribute(relationName, rows as any);
             }
             return this._attributes[key];
           });
@@ -447,7 +447,7 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
    * @param {boolean} instance
    * @returns
    */
-  getRelatedModel(relationName: string, instance = false) {
+  getRelatedModel(relationName: string, instance = true) {
     const relatedModel = ucfirst(Pluralize.singular(relationName));
     const model = this._models?.[relatedModel];
     if (instance && model) {
@@ -507,14 +507,14 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
 
   /**
    * Sets an attribute on the model instance
-   * @param {string} key
-   * @param {any} value
+   * @param {keyof TAttributes} key
+   * @param {TAttributes[K]} value
    * @returns {boolean}
    */
-  setAttribute(key: string, value: any): boolean {
+  setAttribute<K extends keyof TAttributes>(key: K, value: TAttributes[K]): boolean {
     // Check that key exists in the model
     const columns = Object.keys(getTableColumns(this._table));
-    if (columns.includes(key)) {
+    if (columns.includes(key as string)) {
       // Set the value
       setProperty(this._attributes, key, value);
 
@@ -529,20 +529,31 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
 
     const relationName = key as string;
     const relation = this.getTableRelation(relationName);
-    const model = this.getRelatedModel(relationName);
+    const model = this.getRelatedModel(relationName, false);
     // Check if relation and model exist
     if (relation && model) {
       //console.log(`Relation: ${key} => ${model}`, value);
       const property = Array.isArray(value)
-        ? value.map((entry) =>
-            entry
-              ? createEloquentModel(model, entry, this._database, this._schema, this._models, this._onChange)
-              : undefined
-          )
+        ? value
+            .map((entry: any) => {
+              if (!entry) {
+                return undefined;
+              }
+              if (entry.constructor.prototype instanceof EloquentModel) {
+                // Already an instance of the model
+                return entry;
+              }
+              // Create a model with the given attributes
+              return createEloquentModel(model, entry, this._database, this._schema, this._models, this._onChange);
+            })
+            .filter((entry: any) => entry !== undefined)
         : value
-          ? createEloquentModel(model, value, this._database, this._schema, this._models, this._onChange)
+          ? value.constructor.prototype instanceof EloquentModel
+            ? value
+            : createEloquentModel(model, value, this._database, this._schema, this._models, this._onChange)
           : undefined;
-      setProperty(this._attributes, key, property as any);
+      setProperty(this._attributes, key, property);
+      return true;
     }
 
     // No change made

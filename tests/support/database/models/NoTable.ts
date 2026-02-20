@@ -1,13 +1,13 @@
 import EloquentModel from './EloquentModel';
 
-export interface TNoTable {
+export interface NoTableAttributes {
   field: string;
   value?: string;
 }
 
-export class NoTableClass extends EloquentModel<TNoTable> {}
+export class NoTableClass extends EloquentModel<NoTableAttributes> {}
 
-interface NoTable extends TNoTable {}
+interface NoTable extends NoTableAttributes {}
 class NoTable extends NoTableClass {}
 
 export default NoTable;

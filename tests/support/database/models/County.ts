@@ -1,15 +1,15 @@
 import EloquentModel from './EloquentModel';
 import Town from './Town';
 
-export interface TCounty {
+export interface CountyAttributes {
   id: number;
   name: string;
   towns?: Town[];
 }
 
-export class CountyClass extends EloquentModel<TCounty> {}
+export class CountyClass extends EloquentModel<CountyAttributes> {}
 
-interface County extends TCounty {}
+interface County extends CountyAttributes {}
 class County extends CountyClass {}
 
 export default County;

@@ -237,18 +237,18 @@ const extendSelectQuery = <
             if (!extendedSelectQuery.withRelations.includes(parentRelation)) {
               throw Error(`Parent relation (${parentRelation}) is missing`);
             }
-            fromModel = fromModel.getRelatedModel(part, true);
+            fromModel = fromModel.getRelatedModel(part);
           } else if (part) {
             // Final part
             relation = fromModel.getTableRelation(part);
-            toModel = fromModel.getRelatedModel(part, true);
+            toModel = fromModel.getRelatedModel(part);
           }
         }
       }
     } else {
       // Root relation
       relation = model.getTableRelation(relationName);
-      toModel = model.getRelatedModel(relationName, true);
+      toModel = model.getRelatedModel(relationName);
     }
 
     return { relation, toModel, fromModel };

@@ -134,12 +134,12 @@ describe('getAttribute', () => {
     expect(newUser.getAttribute('name')).toEqual('John');
   });
 
-  it('returns the allback when the property is not present/set', async () => {
+  it('returns the fallback when the property is not present/set', async () => {
     const newUser = user.factory({ name: 'John' });
     expect(newUser.getAttribute('age', 21)).toEqual(21);
   });
 
-  it('returns undefined when the property is not present/set, and no fallback provided', async () => {
+  it('returns undefined when the property is not present/set, and no fallback is provided', async () => {
     const newUser = user.factory({ name: 'John' });
     expect(newUser.getAttribute('age')).toEqual(undefined);
   });
@@ -175,14 +175,23 @@ describe('getPersistedAttributes', () => {
 });
 
 describe('setAttribute', () => {
-  it('set the property of a model', () => {
+  it('set the property of a model, via setAttribute', () => {
     const newUser = user.factory({ name: 'John' });
     newUser.setAttribute('name', 'James');
     expect(newUser.name).toEqual('James');
   });
 
-  it("ignores properties which don't exist", () => {
+  it('set the property of a model, via proxied property', () => {
+    const newUser = user.factory({ name: 'John', age: 35 });
+    newUser.name = 'James';
+    newUser.age = 36;
+    expect(newUser.name).toEqual('James');
+    expect(newUser.age).toEqual(36);
+  });
+
+  it("ignores properties which don't exist, via setAttribute", () => {
     const newUser = user.factory({ name: 'John' });
+    // @ts-expect-error
     newUser.setAttribute('job', 'Director');
     // @ts-expect-error
     expect(newUser.job).toEqual(undefined); // Deliberate error; `job` does not exist on the `UserClass`
@@ -190,7 +199,7 @@ describe('setAttribute', () => {
 });
 
 describe('hydrate', () => {
-  it('converts as array of objects to an array of models', () => {
+  it('converts as array of objects (JSON) to an array of models', () => {
     const userObjects = [
       {
         name: 'Bill',
@@ -311,7 +320,7 @@ describe('query (select)', () => {
     expect(queryWithoutCriteria.length).toEqual(2);
   });
 
-  describe('has a where method which supports alternative syntax', async () => {
+  describe('has a where method which supports alternative syntax:', async () => {
     it('supports where with only two parameters and infers it as equals', async () => {
       const savedUsers = await user.query().where('name', 'John');
       expect(savedUsers.length).toEqual(1);
@@ -399,6 +408,13 @@ describe('query (select)', () => {
     expect(savedUsers.length).toEqual(1);
     const savedUser = savedUsers[0];
     expect(savedUser.name).toEqual('John');
+  });
+});
+
+describe('getTableRelations', () => {
+  it('returns no records for a table with no relations', () => {
+    const newNoKey = noKey.factory({ field: 'abc', value: '123' });
+    expect(newNoKey.getTableRelations()).toEqual({});
   });
 });
 
@@ -598,7 +614,7 @@ describe('relationships', () => {
     expect(savedBen.name).toEqual('Ben');
   });
 
-  it("ignores trailing '.' when using with", async () => {
+  it("ignore trailing '.' when using with", async () => {
     const savedCounties = collect(
       await county
         .query()
@@ -618,5 +634,47 @@ describe('relationships', () => {
         await county.query().with('towns.users').whereIn(schema.countiesTable.name, ['Dorset', 'Powys']).hydrate()
       );
     await expect(savedCounties()).rejects.toThrowError(new Error('Parent relation (towns) is missing'));
+  });
+
+  it('may be set One using the model class', () => {
+    const newUser = user.factory({ name: 'Steve' });
+    const newTown = town.factory({ name: 'Coventry' });
+    newUser.setAttribute('town', newTown);
+    expect(newUser.town?.name).toEqual('Coventry');
+  });
+
+  it('may be set One using the model attributes', () => {
+    const newUser = user.factory({ name: 'Steve' });
+    newUser.town = { name: 'Coventry' } as any;
+    expect(newUser.town?.name).toEqual('Coventry');
+  });
+
+  it('may be set Many using the model class', () => {
+    const newCounty = county.factory({ name: 'Warwickshire' });
+    const newTown = town.factory({ name: 'Coventry' });
+    newCounty.towns = [newTown];
+    expect(newCounty.towns?.length).toEqual(1);
+    expect(newCounty.towns[0].name).toEqual('Coventry');
+  });
+
+  it('may be set Many using the model attributes', () => {
+    const newCounty = county.factory({ name: 'Warwickshire' });
+    newCounty.setAttribute('towns', [{ name: 'Coventry' } as any]);
+    expect(newCounty.towns?.length).toEqual(1);
+    if (newCounty.towns?.length) {
+      expect(newCounty.towns[0].name).toEqual('Coventry');
+    }
+  });
+
+  it('removes undefined entries from array when setting Many relations', () => {
+    const newCounty = county.factory({ name: 'Warwickshire' });
+    const coventry = town.factory({ name: 'Coventry' });
+    const bedworth = town.factory({ name: 'Bedworth' });
+    newCounty.setAttribute('towns', [coventry, undefined as any, bedworth]);
+    expect(newCounty.towns?.length).toEqual(2);
+    if (newCounty.towns?.length === 2) {
+      expect(newCounty.towns[0].name).toEqual('Coventry');
+      expect(newCounty.towns[1].name).toEqual('Bedworth');
+    }
   });
 });

@@ -2,7 +2,7 @@ import County from './County';
 import EloquentModel from './EloquentModel';
 import User from './User';
 
-export interface TTown {
+export interface TownAttributes {
   id: number;
   name: string;
   county_id: number;
@@ -10,9 +10,9 @@ export interface TTown {
   users?: User[];
 }
 
-export class TownClass extends EloquentModel<TTown> {}
+export class TownClass extends EloquentModel<TownAttributes> {}
 
-interface Town extends TTown {}
+interface Town extends TownAttributes {}
 class Town extends TownClass {}
 
 export default Town;

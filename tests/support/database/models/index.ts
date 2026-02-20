@@ -1,8 +1,8 @@
-import County, { CountyClass, TCounty } from './County';
-import NoKey, { NoKeyClass, TNoKey } from './NoKey';
-import NoTable, { NoTableClass, TNoTable } from './NoTable';
-import Town, { TTown, TownClass } from './Town';
-import User, { TUser, UserClass } from './User';
+import County, { CountyAttributes, CountyClass } from './County';
+import NoKey, { NoKeyAttributes, NoKeyClass } from './NoKey';
+import NoTable, { NoTableAttributes, NoTableClass } from './NoTable';
+import Town, { TownAttributes, TownClass } from './Town';
+import User, { UserAttributes, UserClass } from './User';
 
 // List of models
 const DatabaseModels = {
@@ -19,6 +19,6 @@ export { CountyClass, NoKeyClass, NoTableClass, TownClass, UserClass };
 export { County, NoKey, NoTable, Town, User };
 
 // Export types
-export { TCounty, TNoKey, TNoTable, TTown, TUser };
+export { CountyAttributes, NoKeyAttributes, NoTableAttributes, TownAttributes, UserAttributes };
 
 export default DatabaseModels;

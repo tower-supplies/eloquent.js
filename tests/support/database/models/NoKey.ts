@@ -1,13 +1,13 @@
 import EloquentModel from './EloquentModel';
 
-export interface TNoKey {
+export interface NoKeyAttributes {
   field: string;
   value?: string;
 }
 
-export class NoKeyClass extends EloquentModel<TNoKey> {}
+export class NoKeyClass extends EloquentModel<NoKeyAttributes> {}
 
-interface NoKey extends TNoKey {}
+interface NoKey extends NoKeyAttributes {}
 class NoKey extends NoKeyClass {}
 
 export default NoKey;
