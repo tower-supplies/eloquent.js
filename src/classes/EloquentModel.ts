@@ -21,7 +21,7 @@ import DatabaseChangeType from '../enums/DatabaseChangeType';
 import extendSelectQuery, { TSelectQuery, TSelectQueryExtended } from '../extensions/extendedSelectQuery';
 import { modelValidator } from '../rules';
 import { TAttributes as Attributes, TDatabase, TDatabaseModels, TModelType, TOnChangeModel, TSchema } from '../types';
-import { ucfirst } from '../utils';
+import { deepMerge, ucfirst } from '../utils';
 
 /**
  * Sets property on an object
@@ -315,7 +315,13 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
           } else if (relation instanceof One) {
             // Has One
             const relation = this.rowMapper(rawRow, modelInstance, relatedRelations, {});
-            row[relationName] = relation ?? undefined;
+            if (row[relationName]) {
+              // Deep merge
+              deepMerge(row[relationName], relation);
+            } else {
+              // First of type
+              row[relationName] = relation;
+            }
           }
         }
       });
