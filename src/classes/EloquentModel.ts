@@ -317,7 +317,7 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
             const relation = this.rowMapper(rawRow, modelInstance, relatedRelations, {});
             if (row[relationName]) {
               // Deep merge
-              deepMerge(row[relationName], relation);
+              row[relationName] = deepMerge(row[relationName], relation);
             } else {
               // First of type
               row[relationName] = relation;
