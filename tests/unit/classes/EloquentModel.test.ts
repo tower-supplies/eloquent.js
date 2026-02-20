@@ -12,8 +12,11 @@ import reset from '@/utils/reset';
 
 import DatabaseModels, {
   CountyClass,
+  ItemClass,
   NoKeyClass,
   NoTableClass,
+  ProductClass,
+  ProductPropertyClass,
   TownClass,
   UserClass,
 } from '../../support/database/models';
@@ -25,6 +28,9 @@ const noKey = createEloquentModel(NoKeyClass, {}, drizzleDb, schema, DatabaseMod
 const user = createEloquentModel(UserClass, {}, drizzleDb, schema, DatabaseModels);
 const town = createEloquentModel(TownClass, {}, drizzleDb, schema, DatabaseModels);
 const county = createEloquentModel(CountyClass, {}, drizzleDb, schema, DatabaseModels);
+const item = createEloquentModel(ItemClass, {}, drizzleDb, schema, DatabaseModels);
+const product = createEloquentModel(ProductClass, {}, drizzleDb, schema, DatabaseModels);
+const productProperty = createEloquentModel(ProductPropertyClass, {}, drizzleDb, schema, DatabaseModels);
 
 beforeAll(async () => {
   // Extend the relational query
@@ -676,5 +682,42 @@ describe('relationships', () => {
       expect(newCounty.towns[0].name).toEqual('Coventry');
       expect(newCounty.towns[1].name).toEqual('Bedworth');
     }
+  });
+
+  it('eagerly loads Many through One', async () => {
+    const newProduct = product.factory({ name: 'Product' });
+    await newProduct.save();
+
+    const newItem = item.factory({ name: 'Item', product_id: newProduct.id });
+    await newItem.save();
+
+    const newProductProperty1 = productProperty.factory({
+      field: 'Property 1',
+      value: '123',
+      product_id: newProduct.id,
+    });
+    await newProductProperty1.save();
+    const newProductProperty2 = productProperty.factory({
+      field: 'Property 2',
+      value: '456',
+      product_id: newProduct.id,
+    });
+    await newProductProperty2.save();
+    const newProductProperty3 = productProperty.factory({
+      field: 'Property 3',
+      value: '789',
+      product_id: newProduct.id,
+    });
+    await newProductProperty3.save();
+
+    const savedItem = await item
+      .query()
+      .where('name', 'Item')
+      .with('product')
+      .with('product.productProperties')
+      .hydrate();
+    expect(savedItem.length).toEqual(1);
+    expect(savedItem[0].product?.id).toEqual(newProduct.id);
+    expect(savedItem[0].product?.productProperties?.length).toEqual(3);
   });
 });

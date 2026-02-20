@@ -3,9 +3,9 @@ import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { describe, expect, it } from 'vitest';
 
+import { createEloquentModel } from '@/classes';
 import { addRules, modelRules } from '@/rules/modelValidator';
 
-import { createEloquentModel } from '@/classes';
 import DatabaseModels, { UserClass } from '../../support/database/models';
 import * as schema from '../../support/database/schema';
 import { TDatabase } from '../../support/database/types';

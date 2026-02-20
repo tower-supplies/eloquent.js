@@ -1,6 +1,9 @@
 import County, { CountyAttributes, CountyClass } from './County';
+import Item, { ItemAttributes, ItemClass } from './Item';
 import NoKey, { NoKeyAttributes, NoKeyClass } from './NoKey';
 import NoTable, { NoTableAttributes, NoTableClass } from './NoTable';
+import Product, { ProductAttributes, ProductClass } from './Product';
+import ProductProperty, { ProductPropertyAttributes, ProductPropertyClass } from './ProductProperty';
 import Town, { TownAttributes, TownClass } from './Town';
 import User, { UserAttributes, UserClass } from './User';
 
@@ -10,15 +13,27 @@ const DatabaseModels = {
   User,
   Town,
   County,
+  Item,
+  Product,
+  ProductProperty,
 };
 
 // Export classes
-export { CountyClass, NoKeyClass, NoTableClass, TownClass, UserClass };
+export { CountyClass, ItemClass, NoKeyClass, NoTableClass, ProductClass, ProductPropertyClass, TownClass, UserClass };
 
 // Export models
-export { County, NoKey, NoTable, Town, User };
+export { County, Item, NoKey, NoTable, Product, ProductProperty, Town, User };
 
-// Export types
-export { CountyAttributes, NoKeyAttributes, NoTableAttributes, TownAttributes, UserAttributes };
+// Export attributes
+export {
+  CountyAttributes,
+  ItemAttributes,
+  NoKeyAttributes,
+  NoTableAttributes,
+  ProductAttributes,
+  ProductPropertyAttributes,
+  TownAttributes,
+  UserAttributes,
+};
 
 export default DatabaseModels;

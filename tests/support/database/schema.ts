@@ -62,3 +62,58 @@ export const countiesTable = sqliteTable('counties', {
 export const countyRelations = relations(countiesTable, ({ many }) => ({
   towns: many(townsTable),
 }));
+
+/**
+ * Items
+ */
+export const itemsTable = sqliteTable('items', {
+  id: int().primaryKey({ autoIncrement: true }),
+  name: text().notNull(),
+  product_id: int(),
+});
+
+/**
+ * Item relations
+ */
+export const itemRelations = relations(itemsTable, ({ one }) => ({
+  product: one(productsTable, {
+    fields: [itemsTable.product_id],
+    references: [productsTable.id],
+  }),
+}));
+
+/**
+ * Products
+ */
+export const productsTable = sqliteTable('products', {
+  id: int().primaryKey({ autoIncrement: true }),
+  name: text().notNull(),
+});
+
+/**
+ * Product relations
+ */
+export const productRelations = relations(productsTable, ({ many }) => ({
+  items: many(itemsTable),
+  productProperties: many(productPropertiesTable),
+}));
+
+/**
+ * Product properties
+ */
+export const productPropertiesTable = sqliteTable('product_properties', {
+  id: int().primaryKey({ autoIncrement: true }),
+  field: text().notNull(),
+  value: text(),
+  product_id: int(),
+});
+
+/**
+ * Product property relations
+ */
+export const productPropertyRelations = relations(productPropertiesTable, ({ one }) => ({
+  product: one(productsTable, {
+    fields: [productPropertiesTable.product_id],
+    references: [productsTable.id],
+  }),
+}));
