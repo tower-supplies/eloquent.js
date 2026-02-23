@@ -1,5 +1,4 @@
 import Model from '@/classes/EloquentModel';
-
 import { TAttributes } from '@/types';
 
 import { TDatabase } from '../types';
