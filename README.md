@@ -17,7 +17,7 @@ Add the package to your project using your preferred package management tool, e.
 npm i @tower-supplies/eloquent.js
 ```
 
-Additional package/dependency, depending on requirements:
+Database driver package, depending on your requirements:
 
 ```bash
 npm i better-sqlite OR npm i expo-sqlite
@@ -31,7 +31,7 @@ npm i -D drizzle-kit
 
 ## Configuration
 
-As the package uses [Drizzle ORM](https://orm.drizzle.team/) behind the scenes most of the initial configuration is the same as Drizzle, and their documentation can be followed to create a database [schema](https://orm.drizzle.team/docs/sql-schema-declaration) and/or [migrations](https://orm.drizzle.team/docs/migrations).
+As the package uses [Drizzle ORM](https://orm.drizzle.team/) behind the scenes, most of the initial configuration is the same as Drizzle, and their documentation can be followed to create a database [schema](https://orm.drizzle.team/docs/sql-schema-declaration) and/or [migrations](https://orm.drizzle.team/docs/migrations).
 
 ### Schema
 
@@ -62,7 +62,7 @@ export default defineConfig({
 });
 ```
 
-To create the database migrations the console command:
+Then create the database migrations via the console:
 
 ```bash
 npx drizzle-kit generate
@@ -149,7 +149,7 @@ const {
 
 ### Without Context
 
-It is also possible to manually initialise an individual model, outside of the provided React Context:
+Alternatively, it is possible to manually initialise an individual model, outside of the React Context:
 
 ```ts
 import { createEloquentModel, TDatabase } from '@tower-supplies/eloquent.js';
@@ -165,7 +165,7 @@ const user = createEloquentModel(UserClass, {}, drizzleDb, schema, DatabaseModel
 
 ## Usage
 
-Some basic usage examples are shown below. Reviewing the test suite for more detailed examples and/or more complex usage.
+Some basic usage examples are shown below. Review the test suite for more detailed examples and/or more complex usage.
 
 ### Creating
 
@@ -199,9 +199,9 @@ user.find(1).then((savedUser) => {;
 
 #### Where
 
-The first parameter is the field to query; it may be the field name as a string or the `SQLiteColumn` from Drizzle.
+The first parameter is the field to query; it may be the field name, provided as a string, or the `SQLiteColumn` from Drizzle.
 
-The second parameter is the 'operation'; the currenty operators which are supported are:
+The second parameter is the 'operation'; currently supported operators are:
 | Operator | Description |
 |----------|---------------------------|
 | = | Equals |
@@ -226,7 +226,7 @@ When querying for multiple parameters the `whereIn` and `whereNotIn` methods may
 ```ts
 user.query()
     .whereIn('name', ['John', 'Steve'])
-    .then((users) => ...) // JSON objects
+    .then((users) => ...) // JSON objects (properties)
 ```
 
 ### Hydration
@@ -236,12 +236,12 @@ user.query()
     .where('name', 'John') // or .where('name', '=', 'John)
     .where('age', '>', 40)
     .hydrate()
-    .then((users) => ...) // Model objects
+    .then((users) => ...) // Model objects, as opposed to JSON
 ```
 
 ### Relations
 
-Relations between models are handled in one of two ways, either via lazy loading (that delays loading non-critical models until they are needed) or eager loading when the relations are found, and populated, at the time of the original query. When using `Eloquent.js`s lazy loading strategy the initial access to the relation will return a `Promise`. Subsequent access will return the relation directly, as it has already been loaded.
+Relations between models are handled in one of two ways, either via lazy loading (that delays loading of models until they are needed) or eager loading when the relations are found, and populated, at the time of the original query. When using `Eloquent.js`s lazy loading strategy the initial access to the relation will return a `Promise`. Subsequent access will return the relation directly, as it has already been loaded.
 
 #### Lazy loading
 
@@ -288,7 +288,7 @@ When making changes please try to ensure that, if anything, the coverage percent
 
 #### Changes to the test database
 
-If changes are made to the schema of the tests it will be necessary to regenerate the migrations for the test suite. This may be done using the following command:
+If changes are made to the test database schema it will be necessary to regenerate the migrations for the test suite. This may be done using the following command:
 
 ```
 npx drizzle-kit generate --config=./configs/drizzle.config.tests.ts
