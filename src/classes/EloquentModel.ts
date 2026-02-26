@@ -153,6 +153,9 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
             Object.keys(relations).includes(stringName)
           ) {
             //console.log(`Setting attribute '${stringName}': ${attributes[stringName]} => ${value}`);
+            if (Object.keys(attributes).includes(stringName) && (attributes[stringName] === value)) {
+              return true;
+            }
             return model.setAttribute(stringName, value);
           }
         }
@@ -206,36 +209,7 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
    * @returns
    */
   relationalRowMapper(rawRows: Record<string, any>, withRelations: string[]): TAttributes[] {
-    /*
-    // Originally it looked like using the relational query might be easier, but it actually ended up seeming longer
-    // and/or convoluted than using a custom implementation
-    const { tables, tableNamesMap } = extractTablesRelationalConfig(this._schema, createTableRelationsHelpers);
-    const tableConfig: TableRelationalConfig | undefined = Object.values(tables)
-      .find(({ dbName }) => dbName === this.getTableName());
-
-    if (tableConfig) { 
-      const selectionEntries = Object.entries(tableConfig.columns);
-      const selection = selectionEntries.map(([key, value]) => ({
-        dbKey: value.name,
-        tsKey: key,
-        field: aliasedTableColumn(value, 'users'), // aliasedTableColumn(value, tableAlias),
-        relationTableTsKey: void 0,
-        isJson: false,
-        selection: []
-      }));
-
-      const rows = rawRows.map((row) => mapRelationalRow(tables, tableConfig, row, selection));
-      console.log(rows);
-      if (this.queryMode === "first") {
-        return rows[0];
-      }
-      return rows;
-    }
-    */
-
     // Iterate over each of the raw rows with the row mapper
-    //const rows = {} as Record<string, TAttributes[]>;
-    //const rows = [] as TAttributes[];
     const rows: Record<string, TAttributes> = {};
     rawRows.forEach((rawRow: any) => {
       this.rowMapper(rawRow, this, withRelations, rows);

@@ -181,18 +181,34 @@ describe('getPersistedAttributes', () => {
 });
 
 describe('setAttribute', () => {
-  it('set the property of a model, via setAttribute', () => {
+  it('sets the property of a model, via setAttribute', () => {
     const newUser = user.factory({ name: 'John' });
     newUser.setAttribute('name', 'James');
     expect(newUser.name).toEqual('James');
   });
 
-  it('set the property of a model, via proxied property', () => {
+  it('sets the property of a model, via proxied property', () => {
     const newUser = user.factory({ name: 'John', age: 35 });
     newUser.name = 'James';
     newUser.age = 36;
     expect(newUser.name).toEqual('James');
     expect(newUser.age).toEqual(36);
+  });
+
+  it('re-sets the property of a model, via proxied property', async () => {
+    const jim = user.factory({ name: 'Jim', age: 27, email: 'jim@eloquent.js' });
+    const saved = await jim.save();
+    expect(saved).toEqual(true);
+    jim.name = 'Jim';
+    expect(jim.name).toEqual('Jim');
+    const deleted = await jim.delete();
+    expect(deleted).toEqual(true);
+  });
+
+  it('sets the property of a model to undefined, via a proxied property', () => {
+    const newNoKey = noKey.factory({ field: 'abc', value: '123' });
+    newNoKey.value = undefined;
+    expect(newNoKey.value).toEqual(undefined);
   });
 
   it("ignores properties which don't exist, via setAttribute", () => {

@@ -107,17 +107,19 @@ const DatabaseProvider = <TDatabase extends TDatabaseType, TModels extends TMode
    */
   function onChange<T>(changeType: DatabaseChangeType, model: T) {
     if (database) {
-      const modelKey = model?.constructor.name.toLowerCase()!;
+      const modelKey = model?.constructor.name;
       const payload: TModels = {} as TModels;
-      registerModel(
-        payload,
-        database,
-        schema as unknown as TSchema,
-        databaseModels,
-        modelKey,
-        databaseModels[modelKey],
-        onChange
-      );
+      if (modelKey) {
+        registerModel(
+          payload,
+          database,
+          schema as unknown as TSchema,
+          databaseModels,
+          modelKey,
+          databaseModels[modelKey],
+          onChange
+        );
+      }
       setModels({ type: ModelsActionType.CHANGE_MODELS, payload });
     }
   }
