@@ -153,7 +153,7 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
             Object.keys(relations).includes(stringName)
           ) {
             //console.log(`Setting attribute '${stringName}': ${attributes[stringName]} => ${value}`);
-            if (Object.keys(attributes).includes(stringName) && (attributes[stringName] === value)) {
+            if (Object.keys(attributes).includes(stringName) && attributes[stringName] === value) {
               return true;
             }
             return model.setAttribute(stringName, value);
