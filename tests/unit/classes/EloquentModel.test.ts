@@ -15,6 +15,7 @@ import DatabaseModels, {
   ItemClass,
   NoKeyClass,
   NoTableClass,
+  OrderClass,
   ProductClass,
   ProductPropertyClass,
   TownClass,
@@ -31,6 +32,7 @@ const county = createEloquentModel(CountyClass, {}, drizzleDb, schema, DatabaseM
 const item = createEloquentModel(ItemClass, {}, drizzleDb, schema, DatabaseModels);
 const product = createEloquentModel(ProductClass, {}, drizzleDb, schema, DatabaseModels);
 const productProperty = createEloquentModel(ProductPropertyClass, {}, drizzleDb, schema, DatabaseModels);
+const order = createEloquentModel(OrderClass, {}, drizzleDb, schema, DatabaseModels);
 
 beforeAll(async () => {
   // Extend the relational query
@@ -636,6 +638,41 @@ describe('relationships', () => {
     expect(savedBen.name).toEqual('Ben');
   });
 
+  it('supports array format relations when using with', async () => {
+    const savedCounties = collect(
+      await county
+        .query()
+        .with(['towns', 'towns.users'])
+        .whereIn(schema.countiesTable.name, ['Dorset', 'Powys'])
+        .hydrate()
+    );
+    expect(savedCounties.count()).toEqual(2);
+  });
+
+  it('allows manual aliasing when using with', async () => {
+    const savedCounties = collect(
+      await county
+        .query()
+        .with(['towns AS myCustomTableAlias'])
+        .whereIn(schema.countiesTable.name, ['Dorset', 'Powys'])
+        .hydrate()
+    );
+    expect(savedCounties.count()).toEqual(2);
+    const savedDorset = savedCounties.where('name', 'Dorset').first();
+    expect(savedDorset.name).toEqual('Dorset');
+  });
+
+  it('allows use of manual aliased relations in where', async () => {
+    console.log(await county.query().with(['towns AS town']).where('town.name', 'Bournemouth').toSQL());
+
+    const savedCounties = collect(
+      await county.query().with(['towns AS town']).where('town.name', 'Bournemouth').hydrate()
+    );
+    expect(savedCounties.count()).toEqual(1);
+    const savedDorset = savedCounties.where('name', 'Dorset').first();
+    expect(savedDorset.name).toEqual('Dorset');
+  });
+
   it("ignore trailing '.' when using with", async () => {
     const savedCounties = collect(
       await county
@@ -735,5 +772,28 @@ describe('relationships', () => {
     expect(savedItem.length).toEqual(1);
     expect(savedItem[0].product?.id).toEqual(newProduct.id);
     expect(savedItem[0].product?.productProperties?.length).toEqual(3);
+  });
+
+  it('allows multiple relations to a single table', async () => {
+    const john = await user.find(1);
+    const jimmy = await user.find(2);
+
+    // Order placed by John (1) for Jimmy (2)
+    const newOrder = order.factory({ reference: 'abc', placed_by_id: 1, placed_for_id: 2 });
+    const saved = await newOrder.save();
+    expect(saved).toEqual(true);
+
+    // Fetch order with people
+    const savedOrders = await order.query().where('reference', 'abc').with('placedBy').with('placedFor').hydrate();
+
+    // Check we have the correct order
+    expect(savedOrders.length).toEqual(1);
+    const savedOrder = savedOrders[0];
+    expect(savedOrder.id).toEqual(1);
+    expect(savedOrder.reference).toEqual('abc');
+
+    // Check we have the correct people
+    expect(savedOrder.placedBy).toEqual(john);
+    expect(savedOrder.placedFor).toEqual(jimmy);
   });
 });

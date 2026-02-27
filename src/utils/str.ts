@@ -4,13 +4,26 @@
  */
 
 /**
- * snake_case to camelCase function
+ * Convert to camelCase
  *
  * @param {string} input
  * @returns {string}
  */
 export function camel(input: string): string {
-  return input.toLowerCase().replace(/([_][a-z])/g, (group) => group.toUpperCase().replace('_', ''));
+  return input.toLowerCase().replace(/([_.][a-z])/g, (group) => group.toUpperCase().replace(/[_.]/, ''));
+}
+
+/**
+ * Convert to snake_case
+ *
+ * @param {string} input
+ * @returns {string}
+ */
+export function snake(input: string): string {
+  return input
+    .replace(/([a-z])(\.|[A-Z])/g, '$1_$2')
+    .toLowerCase()
+    .replace('.', '');
 }
 
 /**

@@ -1,7 +1,7 @@
 {
   "name": "@tower-supplies/eloquent.js",
   "description": "An object relation mapper (ORM) library, inspired by Laravel's Eloquent",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Adrian Stokes <adrian.stokes@towersupplies.com>",
   "license": "MIT",
   "files": [

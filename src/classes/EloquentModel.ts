@@ -21,7 +21,7 @@ import DatabaseChangeType from '../enums/DatabaseChangeType';
 import extendSelectQuery, { TSelectQuery, TSelectQueryExtended } from '../extensions/extendedSelectQuery';
 import { modelValidator } from '../rules';
 import { TAttributes as Attributes, TDatabase, TDatabaseModels, TModelType, TOnChangeModel, TSchema } from '../types';
-import { deepMerge, ucfirst } from '../utils';
+import { camel, deepMerge, ucfirst } from '../utils';
 
 /**
  * Sets property on an object
@@ -208,12 +208,14 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
    * @param withRelations
    * @returns
    */
-  relationalRowMapper(rawRows: Record<string, any>, withRelations: string[]): TAttributes[] {
+  relationalRowMapper(rawRows: Record<string, any>, withRelations: Record<string, string>): TAttributes[] {
     // Iterate over each of the raw rows with the row mapper
     const rows: Record<string, TAttributes> = {};
+    //console.log(rawRows);
     rawRows.forEach((rawRow: any) => {
-      this.rowMapper(rawRow, this, withRelations, rows);
+      this.rowMapper(rawRow, this, null, withRelations, rows);
     });
+    //console.log(rows);
     return this.flatten(Object.values(rows), this);
   }
 
@@ -245,6 +247,20 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
   }
 
   /**
+   * Finds the table alias for a relation
+   * @param {string} relationName
+   * @param {Record<string, string> relations
+   * @returns string
+   */
+  public relationTableAlias(relationName: string, relations: Record<string, string>): string {
+    const alias = Object.keys(relations).find((key) => relations[key] === relationName);
+    if (!alias) {
+      throw new Error(`Unable to find alias for relation ${relationName}`);
+    }
+    return alias;
+  }
+
+  /**
    * Maps the objects from the rawRow to the relevant hierarchy in a row
    * @param {any} rawRow
    * @param {TRowModel extends TDatabaseModels} model
@@ -254,10 +270,11 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
   protected rowMapper<TRowModel extends TDatabaseModels>(
     rawRow: any,
     model: TRowModel,
-    withRelations: string[],
+    key: string | null,
+    withRelations: Record<string, string>,
     rows: Record<string, any>
   ) {
-    const tableName = model.getTableName();
+    const tableName = key ?? model.getTableName();
     const tableRelations = Object.entries(model.getTableRelations());
     const primaryKey = rawRow[tableName] ? rawRow[tableName][model.getKeyName()] : undefined;
 
@@ -271,24 +288,26 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
     if (row) {
       tableRelations.forEach(([relationName, relation]) => {
         const modelInstance = model.getRelatedModel(relationName);
-        if (modelInstance && withRelations.includes(relationName)) {
+        if (modelInstance && Object.values(withRelations).includes(relationName)) {
           const regex = new RegExp(`^${relationName}.(.*)`);
-          const relatedRelations = withRelations
-            .map((relation: string): string | null => {
-              const matches = relation.match(regex);
-              return matches?.length ? matches[1] : null;
-            })
-            .filter((relation) => !!relation) as string[];
+          const relatedRelations: Record<string, string> = {};
+          Object.entries(withRelations).forEach(([alias, relation]) => {
+            const matches = relation.match(regex);
+            if (matches) {
+              relatedRelations[alias] = matches[1];
+            }
+          });
 
+          const relationTableAlias = this.relationTableAlias(relationName, withRelations);
           if (relation instanceof Many) {
             // Has Many
             if (row[relationName] === undefined) {
               row[relationName] = {};
             }
-            this.rowMapper(rawRow, modelInstance, relatedRelations, row[relationName]);
+            this.rowMapper(rawRow, modelInstance, relationTableAlias, relatedRelations, row[relationName]);
           } else if (relation instanceof One) {
             // Has One
-            const relation = this.rowMapper(rawRow, modelInstance, relatedRelations, {});
+            const relation = this.rowMapper(rawRow, modelInstance, relationTableAlias, relatedRelations, {});
             if (row[relationName]) {
               // Deep merge
               row[relationName] = deepMerge(row[relationName], relation);
@@ -436,7 +455,8 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
    * @returns
    */
   getRelatedModel(relationName: string, instance = true) {
-    const relatedModel = ucfirst(Pluralize.singular(relationName));
+    const relation = this.getTableRelation(relationName);
+    const relatedModel = ucfirst(Pluralize.singular(relation ? camel(relation.referencedTableName) : relationName));
     const model = this._models?.[relatedModel];
     if (instance && model) {
       return createEloquentModel(model, {}, this._database, this._schema, this._models, this._onChange);

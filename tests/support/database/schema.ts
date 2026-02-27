@@ -21,11 +21,13 @@ export const usersTable = sqliteTable('users', {
 /**
  * User relations
  */
-export const userRelations = relations(usersTable, ({ one }) => ({
+export const userRelations = relations(usersTable, ({ one, many }) => ({
   town: one(townsTable, {
     fields: [usersTable.town_id],
     references: [townsTable.id],
   }),
+  ordersPlaced: many(ordersTable, { relationName: 'placedBy' }),
+  orders: many(ordersTable, { relationName: 'placedFor' }),
 }));
 
 /**
@@ -115,5 +117,29 @@ export const productPropertyRelations = relations(productPropertiesTable, ({ one
   product: one(productsTable, {
     fields: [productPropertiesTable.product_id],
     references: [productsTable.id],
+  }),
+}));
+
+/**
+ * Order properties
+ */
+export const ordersTable = sqliteTable('orders', {
+  id: int().primaryKey({ autoIncrement: true }),
+  reference: text().notNull(),
+  placed_by_id: int().notNull(),
+  placed_for_id: int().notNull(),
+});
+
+/**
+ * Order relations
+ */
+export const orderRelations = relations(ordersTable, ({ one }) => ({
+  placedBy: one(usersTable, {
+    fields: [ordersTable.placed_by_id],
+    references: [usersTable.id],
+  }),
+  placedFor: one(usersTable, {
+    fields: [ordersTable.placed_for_id],
+    references: [usersTable.id],
   }),
 }));

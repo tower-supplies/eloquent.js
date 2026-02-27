@@ -1,5 +1,18 @@
-import { and, eq, inArray, Many, notInArray, One, or, Relation, SQL } from 'drizzle-orm';
-import { SQLiteColumn, SQLiteSelectBase } from 'drizzle-orm/sqlite-core';
+import {
+  and,
+  AnyColumn,
+  eq,
+  getTableColumns,
+  inArray,
+  Many,
+  notInArray,
+  One,
+  or,
+  Relation,
+  SQL,
+  Table,
+} from 'drizzle-orm';
+import { alias, SQLiteColumn, SQLiteSelectBase } from 'drizzle-orm/sqlite-core';
 import { SQLiteRunResult } from 'expo-sqlite';
 
 import { EloquentModel } from '../classes';
@@ -40,7 +53,7 @@ export type TSelectQueryExtended<TAttributes, TModel> = {
     values: (number | string)[] | undefined
   ) => TSelectQueryExtended<TAttributes, TModel>;
   // Relations
-  with: (relationName: string) => TSelectQueryExtended<TAttributes, TModel>;
+  with: (relationName: string | string[]) => TSelectQueryExtended<TAttributes, TModel>;
 } & TSelectQuery<TAttributes>;
 
 const extendSelectQuery = <
@@ -57,9 +70,9 @@ const extendSelectQuery = <
     _original_where: (where: any) => void;
     // Properties which we don't need to expose
     existingConditions: SQL | undefined;
-    withRelations: string[];
+    withRelations: Record<string, string>;
   };
-  extendedSelectQuery.withRelations = [];
+  extendedSelectQuery.withRelations = {};
 
   // Copy original methods, which we'll replace with our own implementations
   extendedSelectQuery._original_all = query.all;
@@ -72,7 +85,7 @@ const extendSelectQuery = <
   extendedSelectQuery.all = (placeholderValues): TAttributes[] => {
     //console.log('Relational row mapping:', extendedSelectQuery.useRelationalRowMap);
     const rows = extendedSelectQuery._original_all(placeholderValues);
-    if (extendedSelectQuery.withRelations.length) {
+    if (Object.keys(extendedSelectQuery.withRelations).length) {
       return model.relationalRowMapper(rows, extendedSelectQuery.withRelations);
     }
     return rows;
@@ -136,10 +149,25 @@ const extendSelectQuery = <
         return extendedSelectQuery.where(field, '=', operator, !!andConditions);
       }
 
+      // Check if field provided as dot.notation
+      let columns: Record<string, SQLiteColumn<any, {}, {}>> = model.getTableColumns();
+      let columnName: string | undefined = typeof field === 'string' ? field : undefined;
+      if (typeof field === 'string') {
+        const matches = /(.*)\.(.*)/.exec(field);
+        if (matches) {
+          columnName = matches[2];
+
+          const { toModel } = resolveRelation(matches[1]);
+          if (toModel) {
+            const tableDefinition = toModel.getTableDefinition();
+            const aliasedTable = alias(tableDefinition, matches[1]);
+            columns = getTableColumns(aliasedTable as typeof tableDefinition);
+          }
+        }
+      }
+
       const column =
-        field instanceof SQLiteColumn
-          ? field
-          : Object.values(model.getTableColumns()).find(({ name }) => name === field);
+        field instanceof SQLiteColumn ? field : Object.values(columns).find(({ name }) => name === columnName);
       if (!column) {
         throw new Error(`Unable to find column: ${field}`);
       }
@@ -234,7 +262,7 @@ const extendSelectQuery = <
           if (parts.length) {
             // Nested relation, check that parent exists
             const parentRelation = nestedParts.join('.');
-            if (!extendedSelectQuery.withRelations.includes(parentRelation)) {
+            if (!Object.values(extendedSelectQuery.withRelations).includes(parentRelation)) {
               throw Error(`Parent relation (${parentRelation}) is missing`);
             }
             fromModel = fromModel.getRelatedModel(part);
@@ -255,15 +283,59 @@ const extendSelectQuery = <
   };
 
   /**
+   * Internal method to resolve source field for relationships
+   *
+   * @param {Table} sourceTable
+   * @param {AnyColumn} field
+   * @param {string} relationName
+   * @param {Record<string, string>} relations
+   * @returns
+   */
+  const resolveSourceField = (
+    sourceTable: Table,
+    field: AnyColumn,
+    relationName: string,
+    relations: Record<string, string>
+  ): AnyColumn => {
+    const matches = /(.*)\.(.*)/.exec(relationName);
+    if (matches) {
+      // Find source table index
+      const sourceTableAlias = model.relationTableAlias(matches[1], relations);
+      const sourceAlias = alias(sourceTable, sourceTableAlias);
+      return Object.values(sourceAlias).find(({ name }) => name === field.name) ?? field;
+    }
+    return field;
+  };
+
+  /**
    * `with` helper for eager-loading relationships
    *
-   * @param {string} relationName
+   * @param {string|string[]} withRelation
    */
-  extendedSelectQuery.with = (relationName: string): TSelectQueryExtended<TAttributes, TModel> => {
+  extendedSelectQuery.with = (withRelation: string | string[]): TSelectQueryExtended<TAttributes, TModel> => {
+    // Support multiple relations, in array
+    if (Array.isArray(withRelation)) {
+      withRelation.forEach((name) => extendedSelectQuery.with(name));
+      return extendedSelectQuery;
+    }
+
+    // Check if alias is provided in relation
+    let relationName: string;
+    let tableAlias: string | undefined = undefined;
+    const aliasMatch = /(.*) (?:as|AS) (.*)/.exec(withRelation);
+    if (aliasMatch) {
+      relationName = aliasMatch[1];
+      tableAlias = aliasMatch[2];
+    } else {
+      relationName = withRelation;
+    }
+
+    const relations = extendedSelectQuery.withRelations;
     const { relation, toModel, fromModel } = resolveRelation(relationName);
     if (relation && toModel) {
       // Need to use relational row mapping to process the results
-      extendedSelectQuery.withRelations.push(relationName);
+      const relationTableAlias = tableAlias ?? `t${Object.keys(relations).length}`;
+      relations[relationTableAlias] = relationName;
 
       // Attempt to lazy load relation
       if (relation instanceof Many) {
@@ -274,18 +346,25 @@ const extendSelectQuery = <
         );
 
         if (inverseRelation && inverseRelation instanceof One && inverseRelation.config) {
-          const { referencedTable } = relation;
-          const { fields, references } = inverseRelation.config;
+          const { referencedTable, sourceTable } = relation;
+          const { fields, references } = inverseRelation.config; // Inverse of normal fields <=> references
 
-          // Join the table
-          query.leftJoin(referencedTable, eq(fields[0], references[0]));
+          // Join the table, using aliases
+          const sourceField = resolveSourceField(sourceTable, references[0], relationName, relations);
+          const referenceAlias = alias(referencedTable, relationTableAlias);
+          const referenceField = Object.values(referenceAlias).find(({ name }) => name === fields[0].name) ?? fields[0];
+          query.leftJoin(referenceAlias, eq(sourceField, referenceField));
         }
       } else if (relation instanceof One && relation.config) {
-        const { referencedTable } = relation;
+        const { referencedTable, sourceTable } = relation;
         const { fields, references } = relation.config;
 
-        // Join the table
-        query.leftJoin(referencedTable, eq(fields[0], references[0]));
+        // Join the table, using aliases
+        const sourceField = resolveSourceField(sourceTable, fields[0], relationName, relations);
+        const referenceAlias = alias(referencedTable, relationTableAlias);
+        const referenceField =
+          Object.values(referenceAlias).find(({ name }) => name === references[0].name) ?? references[0];
+        query.leftJoin(referenceAlias, eq(referenceField, sourceField));
       }
     }
 

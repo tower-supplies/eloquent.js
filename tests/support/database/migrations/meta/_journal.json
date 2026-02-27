@@ -15,6 +15,13 @@
       "when": 1771611474176,
       "tag": "0001_nebulous_paper_doll",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1772148752696,
+      "tag": "0002_blushing_golden_guardian",
+      "breakpoints": true
     }
   ]
 }
