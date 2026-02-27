@@ -114,6 +114,21 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
   }
 
   /**
+   * @param {string} name
+   * @returns {boolean}
+   */
+  private isProperty(name: string): boolean {
+    const attributes = this.getAttributes();
+    const columns = this.getTableColumns();
+    const relations = this.getTableRelations();
+    return (
+      Object.keys(attributes).includes(name) ||
+      Object.keys(columns).includes(name) ||
+      Object.keys(relations).includes(name)
+    );
+  }
+
+  /**
    * Returns a proxy of the model with magic methods to handle the getting/setting of model properties
    * @param {this} model
    * @returns {Proxy<this>}
@@ -124,15 +139,7 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
         if (!Reflect.has(target, name)) {
           const stringName = String(name);
           //console.log(`Getting non-existent property '${stringName}'`);
-          // Check if attribute exists
-          const attributes = model.getAttributes();
-          const columns = model.getTableColumns();
-          const relations = model.getTableRelations();
-          if (
-            Object.keys(attributes).includes(stringName) ||
-            Object.keys(columns).includes(stringName) ||
-            Object.keys(relations).includes(stringName)
-          ) {
+          if (model.isProperty(stringName)) {
             //console.log(`Returning attribute '${stringName}': ${attributes[stringName]}`);
             return model.getAttribute(stringName as keyof TAttributes);
           }
@@ -143,16 +150,9 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
         if (!Reflect.has(target, name)) {
           const stringName = String(name);
           //console.log(`Setting non-existent property '${stringName}', initial value: ${value}`);
-          // Check if attribute exists
-          const attributes = model.getAttributes();
-          const columns = model.getTableColumns();
-          const relations = model.getTableRelations();
-          if (
-            Object.keys(attributes).includes(stringName) ||
-            Object.keys(columns).includes(stringName) ||
-            Object.keys(relations).includes(stringName)
-          ) {
+          if (model.isProperty(stringName)) {
             //console.log(`Setting attribute '${stringName}': ${attributes[stringName]} => ${value}`);
+            const attributes = model.getAttributes();
             if (Object.keys(attributes).includes(stringName) && attributes[stringName] === value) {
               return true;
             }
