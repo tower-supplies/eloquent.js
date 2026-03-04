@@ -34,4 +34,19 @@ describe('deepMerge', () => {
       b: 'def',
     });
   });
+
+  it('does not attempt to merge non-primitive Objects', () => {
+    const a = {
+      nested: { date: new Date(Date.parse('01 Jan 2026 09:00:00 GMT')) },
+    };
+
+    const b = {
+      nested: { date: new Date(Date.parse('01 Jan 2026 09:00:00 GMT')) },
+    };
+
+    const merged = deepMerge(a, b);
+    expect(merged).toEqual({
+      nested: { date: new Date(Date.parse('01 Jan 2026 09:00:00 GMT')) },
+    });
+  });
 });

@@ -25,7 +25,13 @@ export function deepMerge<T extends object, U extends object>(target: T, source:
     const targetVal = (target as Record<string, unknown>)[key];
     const sourceVal = (source as Record<string, unknown>)[key];
 
-    result[key] = isObject(targetVal) && isObject(sourceVal) ? deepMerge(targetVal, sourceVal) : sourceVal;
+    result[key] =
+      isObject(targetVal) &&
+      Object.prototype.toString.call(targetVal) === '[object Object]' &&
+      isObject(sourceVal) &&
+      Object.prototype.toString.call(sourceVal) === '[object Object]'
+        ? deepMerge(targetVal, sourceVal)
+        : sourceVal;
   }
 
   return result as DeepMerge<T, U>;
