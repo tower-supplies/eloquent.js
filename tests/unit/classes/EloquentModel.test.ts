@@ -117,6 +117,15 @@ describe('save', () => {
     const saved = await newNoKey.save();
     expect(saved).toEqual(true);
   });
+
+  it('returns true when able to persist a new model, whilst providing the key', async () => {
+    const newUser = user.factory({ id: 3, name: 'Jonah', age: 27, email: 'jonah@eloquent.js' });
+    const saved = await newUser.save();
+    expect(saved).toEqual(true);
+    expect(newUser.id).toEqual(3);
+    const deleted = await newUser.delete();
+    expect(deleted).toEqual(true);
+  });
 });
 
 describe('find', () => {
@@ -178,7 +187,7 @@ describe('getPersistedAttributes', () => {
     const properties = { name: 'Jimmy', age: 32, email: 'jimmy@eloquent.js' };
     const newUser = user.factory(properties);
     await newUser.save();
-    expect(newUser.getPersistedAttributes()).toEqual({ id: 2, ...properties });
+    expect(newUser.getPersistedAttributes()).toEqual({ id: 4, ...properties });
   });
 });
 
@@ -776,10 +785,10 @@ describe('relationships', () => {
 
   it('allows multiple relations to a single table', async () => {
     const john = await user.find(1);
-    const jimmy = await user.find(2);
+    const jimmy = await user.find(4);
 
-    // Order placed by John (1) for Jimmy (2)
-    const newOrder = order.factory({ reference: 'abc', placed_by_id: 1, placed_for_id: 2 });
+    // Order placed by John (1) for Jimmy (4)
+    const newOrder = order.factory({ reference: 'abc', placed_by_id: 1, placed_for_id: 4 });
     const saved = await newOrder.save();
     expect(saved).toEqual(true);
 

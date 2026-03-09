@@ -681,7 +681,7 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
     let success = false;
     try {
       const primaryKey = this.getKey();
-      if (!primaryKey) {
+      if (!primaryKey || !(await this.find(primaryKey))) {
         const insertedRows = await this.insert();
         success = !!insertedRows;
       } else if (Object.keys(this._changes).length) {
