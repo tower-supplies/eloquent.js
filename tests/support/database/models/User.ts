@@ -1,4 +1,6 @@
+import Comment from './Comment';
 import EloquentModel from './EloquentModel';
+import Order from './Order';
 import Town from './Town';
 
 export interface UserAttributes {
@@ -8,6 +10,9 @@ export interface UserAttributes {
   email: string;
   town_id?: number;
   town?: Town;
+  orders?: Order[];
+  ordersPlaced?: Order[];
+  comments?: Comment[];
 }
 
 // The class without the interface properties

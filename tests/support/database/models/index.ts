@@ -1,3 +1,4 @@
+import Comment, { CommentAttributes, CommentClass } from './Comment';
 import County, { CountyAttributes, CountyClass } from './County';
 import Item, { ItemAttributes, ItemClass } from './Item';
 import NoKey, { NoKeyAttributes, NoKeyClass } from './NoKey';
@@ -10,18 +11,21 @@ import User, { UserAttributes, UserClass } from './User';
 
 // List of models
 const DatabaseModels = {
-  NoKey,
-  User,
-  Town,
+  Comment,
   County,
   Item,
+  NoKey,
+  NoTable,
   Order,
   Product,
   ProductProperty,
+  Town,
+  User,
 };
 
 // Export classes
 export {
+  CommentClass,
   CountyClass,
   ItemClass,
   NoKeyClass,
@@ -38,6 +42,7 @@ export { County, Item, NoKey, NoTable, Order, Product, ProductProperty, Town, Us
 
 // Export attributes
 export {
+  CommentAttributes,
   CountyAttributes,
   ItemAttributes,
   NoKeyAttributes,

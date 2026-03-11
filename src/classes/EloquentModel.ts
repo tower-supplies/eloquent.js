@@ -8,6 +8,7 @@ import {
   getTableName,
   Many,
   One,
+  Param,
   Relation,
   Relations,
   SQL,
@@ -21,7 +22,7 @@ import DatabaseChangeType from '../enums/DatabaseChangeType';
 import extendSelectQuery, { TSelectQuery, TSelectQueryExtended } from '../extensions/extendedSelectQuery';
 import { modelValidator } from '../rules';
 import { TAttributes as Attributes, TDatabase, TDatabaseModels, TModelType, TOnChangeModel, TSchema } from '../types';
-import { camel, deepMerge, ucfirst } from '../utils';
+import { camel, deepMerge, partition, ucfirst } from '../utils';
 
 /**
  * Sets property on an object
@@ -353,41 +354,54 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
     const relation = this.getTableRelation(relationName);
     const modelInstance = this.getRelatedModel(relationName);
     if (relation && modelInstance) {
-      let criteria: any[] = [];
+      let criteria: SQL[] = [];
       let singular = false;
 
       // Attempt to lazy load relation
       if (relation instanceof Many) {
         // Find the inverse relation so we know which field to use
         const modelRelations: Record<string, Relation<string>> = modelInstance.getTableRelations();
-        const inverseRelation = Object.values(modelRelations).find(
-          ({ referencedTable }) => referencedTable === this.getTableDefinition()
-        );
+        const inverseRelation = Object.values(modelRelations).find((modelRelation) => {
+          const { referencedTable } = modelRelation;
+          return (
+            referencedTable === this.getTableDefinition() &&
+            (modelRelation.relationName === relation.relationName || !modelRelation.relationName)
+          );
+        });
         if (inverseRelation && inverseRelation instanceof One && inverseRelation.config) {
           const { fields, references } = inverseRelation.config;
           criteria = references
             .map((reference, index) => {
+              if (reference instanceof SQL) {
+                return eq(fields[index], reference);
+              }
               const value = this._attributes[reference.name as keyof TAttributes];
               return value ? eq(fields[index], value) : null;
             })
-            .filter((criteria) => criteria);
+            .filter((criteria) => criteria !== null);
         }
       } else if (relation instanceof One && relation.config) {
         singular = true;
         const { fields, references } = relation.config;
         criteria = fields
           .map((field, index) => {
+            if (field instanceof SQL) {
+              return eq(references[index], field);
+            }
             const value = this._attributes[field.name as keyof TAttributes];
             return value ? eq(references[index], value) : null;
           })
-          .filter((criteria) => criteria);
+          .filter((criteria) => criteria !== null);
       }
 
       if (criteria.length) {
+        // Split wheres
+        const [wheres, andWheres] = partition(criteria, (where) => where?.queryChunks[3] instanceof Param);
+
         // Return the promise to fetch and hydrate the relation
         return modelInstance
           .query()
-          .where(criteria)
+          .where(andWheres.length ? and(...wheres, ...andWheres) : wheres)
           .then((rows: TModelType<typeof modelInstance>[]): any => {
             if (singular) {
               this.setAttribute(relationName, rows[0] as any);

@@ -341,30 +341,57 @@ const extendSelectQuery = <
       if (relation instanceof Many) {
         // Find the inverse relation so we know which field to use
         const modelRelations: Record<string, Relation<string>> = toModel.getTableRelations();
-        const inverseRelation = Object.values(modelRelations).find(
-          ({ referencedTable }) => referencedTable === fromModel.getTableDefinition()
-        );
+        const inverseRelation = Object.values(modelRelations).find((modelRelation) => {
+          const { referencedTable } = modelRelation;
+          return (
+            referencedTable === fromModel.getTableDefinition() &&
+            (modelRelation.relationName === relation.relationName || !modelRelation.relationName)
+          );
+        });
 
         if (inverseRelation && inverseRelation instanceof One && inverseRelation.config) {
           const { referencedTable, sourceTable } = relation;
           const { fields, references } = inverseRelation.config; // Inverse of normal fields <=> references
 
           // Join the table, using aliases
-          const sourceField = resolveSourceField(sourceTable, references[0], relationName, relations);
           const referenceAlias = alias(referencedTable, relationTableAlias);
-          const referenceField = Object.values(referenceAlias).find(({ name }) => name === fields[0].name) ?? fields[0];
-          query.leftJoin(referenceAlias, eq(sourceField, referenceField));
+
+          // Build criteria
+          const wheres: SQL[] = [];
+          const andWheres: SQL[] = [];
+          references.forEach((reference, index) => {
+            const sourceField = resolveSourceField(sourceTable, references[index], relationName, relations);
+            const referenceField =
+              Object.values(referenceAlias).find(({ name }) => name === fields[index].name) ?? fields[index];
+            if (reference instanceof SQL) {
+              andWheres.push(eq(referenceField, reference));
+            } else {
+              wheres.push(eq(sourceField, referenceField));
+            }
+          });
+          query.leftJoin(referenceAlias, andWheres.length ? and(...wheres, ...andWheres) : and(...wheres));
         }
       } else if (relation instanceof One && relation.config) {
         const { referencedTable, sourceTable } = relation;
         const { fields, references } = relation.config;
 
         // Join the table, using aliases
-        const sourceField = resolveSourceField(sourceTable, fields[0], relationName, relations);
         const referenceAlias = alias(referencedTable, relationTableAlias);
-        const referenceField =
-          Object.values(referenceAlias).find(({ name }) => name === references[0].name) ?? references[0];
-        query.leftJoin(referenceAlias, eq(referenceField, sourceField));
+
+        // Build criteria
+        const wheres: SQL[] = [];
+        const andWheres: SQL[] = [];
+        references.forEach((reference, index) => {
+          const sourceField = resolveSourceField(sourceTable, fields[index], relationName, relations);
+          const referenceField =
+            Object.values(referenceAlias).find(({ name }) => name === references[index].name) ?? references[index];
+          if (reference instanceof SQL) {
+            andWheres.push(eq(sourceField, reference));
+          } else {
+            wheres.push(eq(referenceField, sourceField));
+          }
+        });
+        query.leftJoin(referenceAlias, andWheres.length ? and(...wheres, ...andWheres) : and(...wheres));
       }
     }
 

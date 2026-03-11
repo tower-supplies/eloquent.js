@@ -11,6 +11,7 @@ import * as extendedRelationalQuery from '@/extensions/extendedRelationalQuery';
 import reset from '@/utils/reset';
 
 import DatabaseModels, {
+  CommentClass,
   CountyClass,
   ItemClass,
   NoKeyClass,
@@ -33,6 +34,7 @@ const item = createEloquentModel(ItemClass, {}, drizzleDb, schema, DatabaseModel
 const product = createEloquentModel(ProductClass, {}, drizzleDb, schema, DatabaseModels);
 const productProperty = createEloquentModel(ProductPropertyClass, {}, drizzleDb, schema, DatabaseModels);
 const order = createEloquentModel(OrderClass, {}, drizzleDb, schema, DatabaseModels);
+const comment = createEloquentModel(CommentClass, {}, drizzleDb, schema, DatabaseModels);
 
 beforeAll(async () => {
   // Extend the relational query
@@ -672,8 +674,6 @@ describe('relationships', () => {
   });
 
   it('allows use of manual aliased relations in where', async () => {
-    console.log(await county.query().with(['towns AS town']).where('town.name', 'Bournemouth').toSQL());
-
     const savedCounties = collect(
       await county.query().with(['towns AS town']).where('town.name', 'Bournemouth').hydrate()
     );
@@ -804,5 +804,86 @@ describe('relationships', () => {
     // Check we have the correct people
     expect(savedOrder.placedBy).toEqual(john);
     expect(savedOrder.placedFor).toEqual(jimmy);
+  });
+
+  it('matches the correct inverse relation, when lazily loading', async () => {
+    const jimmy = await user.find(4);
+
+    const ordersForJimmy = await jimmy?.orders;
+    expect(ordersForJimmy?.length).toEqual(1);
+    if (ordersForJimmy) {
+      expect(ordersForJimmy[0].reference).toEqual('abc');
+    }
+  });
+
+  it('supports a form of polymorhpic relationships, via lazy loading', async () => {
+    const existingOrder = await order.find(1);
+    expect(existingOrder?.reference).toEqual('abc');
+
+    const newComment = comment.factory({ comment: 'Order processed', commentable_id: 1, commentable_type: 'order' });
+    const saved = await newComment.save();
+    expect(saved).toEqual(true);
+
+    const commentOrder = await newComment.order;
+    expect(commentOrder).toEqual(existingOrder);
+
+    const commentUser = await newComment.user;
+    expect(commentUser).toEqual(undefined);
+
+    // Check the inverses
+    const abc = await order.find(1);
+    expect(abc?.reference).toEqual('abc');
+    const orderComments = await abc?.comments;
+    expect(orderComments?.length).toEqual(1);
+
+    const john = await user.find(1);
+    expect(john?.name).toEqual('John');
+    const userComments = await john?.comments;
+    expect(userComments?.length).toEqual(0);
+  });
+
+  it('supports a form of polymorhpic relationships, via eager loading', async () => {
+    const orderComment = await comment.find(1);
+
+    const userComment = comment.factory({ comment: 'Vegetarian', commentable_id: 1, commentable_type: 'user' });
+    const saved = await userComment.save();
+    expect(saved).toEqual(true);
+
+    const existingOrders = await order.query().with(['comments']).where('reference', 'abc').hydrate();
+    expect(existingOrders?.length).toEqual(1);
+    if (existingOrders) {
+      const existingOrder = existingOrders[0];
+      expect(existingOrder.reference).toEqual('abc');
+      expect(existingOrder.comments?.length).toEqual(1);
+      if (existingOrder.comments) {
+        expect(existingOrder.comments[0]).toEqual(orderComment);
+        expect(existingOrder.comments[0].comment, 'Order processed');
+      }
+    }
+
+    // Check the inverses
+    const orders = await order.query().where('id', 1).with('comments').hydrate();
+    expect(orders.length).toEqual(1);
+    if (orders) {
+      const abc = orders[0];
+      expect(abc?.reference).toEqual('abc');
+      const orderComments = await abc?.comments;
+      expect(orderComments?.length).toEqual(1);
+      if (orderComments) {
+        expect(orderComments[0]).toEqual(orderComment);
+      }
+    }
+
+    const users = await user.query().where('id', 1).with('comments').hydrate();
+    expect(users.length).toEqual(1);
+    if (users) {
+      const john = users[0];
+      expect(john?.name).toEqual('John');
+      const userComments = await john?.comments;
+      expect(userComments?.length).toEqual(1);
+      if (userComments) {
+        expect(userComments[0]).toEqual(userComment);
+      }
+    }
   });
 });
