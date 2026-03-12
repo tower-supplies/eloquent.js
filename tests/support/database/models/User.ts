@@ -13,6 +13,7 @@ export interface UserAttributes {
   orders?: Order[];
   ordersPlaced?: Order[];
   comments?: Comment[];
+  deleted?: boolean;
 }
 
 // The class without the interface properties

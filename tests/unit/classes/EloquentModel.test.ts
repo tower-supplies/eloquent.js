@@ -231,6 +231,20 @@ describe('setAttribute', () => {
     // @ts-expect-error
     expect(newUser.job).toEqual(undefined); // Deliberate error; `job` does not exist on the `UserClass`
   });
+
+  it('allows non-persisted properties, which exist on the Model but not in the Schema', async () => {
+    const tim = user.factory({ name: 'Tim' });
+
+    // Setting directly will persist on the root of the model, but NOT within the attributes
+    tim.deleted = true;
+    expect(tim.deleted).toEqual(true);
+    expect(tim.getAttribute('deleted')).toEqual(undefined);
+
+    // Setting via `setAttribute` with the force parameter will persist in the attributes
+    tim.setAttribute('deleted', true, true);
+    expect(tim.deleted).toEqual(true);
+    expect(tim.getAttribute('deleted')).toEqual(true);
+  });
 });
 
 describe('hydrate', () => {
