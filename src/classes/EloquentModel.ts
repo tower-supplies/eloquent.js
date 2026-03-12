@@ -534,7 +534,7 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
    * @param {boolean} force
    * @returns {boolean}
    */
-  setAttribute<K extends keyof TAttributes>(key: K, value: TAttributes[K], force: boolean = false): boolean {
+  setAttribute<K extends keyof TAttributes>(key: K, value: TAttributes[K], force = false): boolean {
     // Check that key exists in the model
     const columns = Object.keys(getTableColumns(this._table));
     if (columns.includes(key as string) || force) {
