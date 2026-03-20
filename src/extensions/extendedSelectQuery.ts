@@ -37,7 +37,7 @@ export type TSelectQueryExtended<TAttributes, TModel> = {
   groupBy: (groupBy: any) => TSelectQueryExtended<TAttributes, TModel>;
   having: (having: any) => TSelectQueryExtended<TAttributes, TModel>;
   limit: (limit: any) => TSelectQueryExtended<TAttributes, TModel>;
-  orderBy: (orderBy: any) => TSelectQueryExtended<TAttributes, TModel>;
+  orderBy: (orderBy: (string | SQLiteColumn | SQL)[]) => TSelectQueryExtended<TAttributes, TModel>;
   // New methods
   hydrate: () => Promise<TModel[]>;
   orWhere: (field: unknown, operator?: TWhereOperator, value?: any) => TSelectQueryExtended<TAttributes, TModel>;
@@ -68,6 +68,9 @@ const extendSelectQuery = <
     // Original methods which need aliasing for reuse
     _original_all: (placeholderValues: any) => TAttributes[];
     _original_where: (where: any) => void;
+    _original_orderBy: (columns: any) => void;
+    // Internal methods
+    fieldToColumn: (field: string) => SQLiteColumn;
     // Properties which we don't need to expose
     existingConditions: SQL | undefined;
     withRelations: Record<string, string>;
@@ -77,10 +80,17 @@ const extendSelectQuery = <
   // Copy original methods, which we'll replace with our own implementations
   extendedSelectQuery._original_all = query.all;
   extendedSelectQuery._original_where = query.where;
+  extendedSelectQuery._original_orderBy = query.orderBy;
 
   // Then => this.execute
   // Execute => this.all
   // All => this._prepare().all(placeholderValues);
+
+  extendedSelectQuery.orderBy = (...columns): TSelectQueryExtended<TAttributes, TModel> => {
+    // @todo Support simple field name based ordering (e.g. `orderBy('name')`)
+    extendedSelectQuery._original_orderBy(columns);
+    return extendedSelectQuery;
+  };
 
   extendedSelectQuery.all = (placeholderValues): TAttributes[] => {
     //console.log('Relational row mapping:', extendedSelectQuery.useRelationalRowMap);
@@ -129,6 +139,38 @@ const extendSelectQuery = <
   };
 
   /**
+   * Convert field name (string) to column
+   *
+   * @param {string} field
+   * @returns {SQLiteColumn}
+   */
+  extendedSelectQuery.fieldToColumn = (field: string): SQLiteColumn => {
+    let columns: Record<string, SQLiteColumn<any, {}, {}>> = model.getTableColumns();
+    let columnName: string = field;
+
+    if (typeof field === 'string') {
+      // Check if field provided as dot.notation
+      const matches = /(.*)\.(.*)/.exec(field);
+      if (matches) {
+        columnName = matches[2];
+        const { toModel } = resolveRelation(matches[1]);
+        if (toModel) {
+          const tableDefinition = toModel.getTableDefinition();
+          const aliasedTable = alias(tableDefinition, matches[1]);
+          columns = getTableColumns(aliasedTable as typeof tableDefinition);
+        }
+      }
+    }
+
+    const column = Object.values(columns).find(({ name }) => name === columnName);
+    if (!column) {
+      throw new Error(`Unable to find column: ${field}`);
+    }
+
+    return column;
+  };
+
+  /**
    * `where` helper
    *
    * @param {unknown} field
@@ -149,28 +191,7 @@ const extendSelectQuery = <
         return extendedSelectQuery.where(field, '=', operator, !!andConditions);
       }
 
-      // Check if field provided as dot.notation
-      let columns: Record<string, SQLiteColumn<any, {}, {}>> = model.getTableColumns();
-      let columnName: string | undefined = typeof field === 'string' ? field : undefined;
-      if (typeof field === 'string') {
-        const matches = /(.*)\.(.*)/.exec(field);
-        if (matches) {
-          columnName = matches[2];
-
-          const { toModel } = resolveRelation(matches[1]);
-          if (toModel) {
-            const tableDefinition = toModel.getTableDefinition();
-            const aliasedTable = alias(tableDefinition, matches[1]);
-            columns = getTableColumns(aliasedTable as typeof tableDefinition);
-          }
-        }
-      }
-
-      const column =
-        field instanceof SQLiteColumn ? field : Object.values(columns).find(({ name }) => name === columnName);
-      if (!column) {
-        throw new Error(`Unable to find column: ${field}`);
-      }
+      const column = field instanceof SQLiteColumn ? field : extendedSelectQuery.fieldToColumn(field);
 
       if (operator) {
         const condition = whereCriteria(column, operator as TWhereOperator, value);
