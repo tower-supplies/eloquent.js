@@ -1,6 +1,10 @@
 import {
   and,
   AnyColumn,
+  asc,
+  ColumnBaseConfig,
+  ColumnDataType,
+  desc,
   eq,
   getTableColumns,
   inArray,
@@ -37,7 +41,9 @@ export type TSelectQueryExtended<TAttributes, TModel> = {
   groupBy: (groupBy: any) => TSelectQueryExtended<TAttributes, TModel>;
   having: (having: any) => TSelectQueryExtended<TAttributes, TModel>;
   limit: (limit: any) => TSelectQueryExtended<TAttributes, TModel>;
-  orderBy: (orderBy: (string | SQLiteColumn | SQL)[]) => TSelectQueryExtended<TAttributes, TModel>;
+  orderBy: (
+    ...orderBy: (string | SQLiteColumn<ColumnBaseConfig<ColumnDataType, string>, {}, {}> | SQL<unknown>)[]
+  ) => TSelectQueryExtended<TAttributes, TModel>;
   // New methods
   hydrate: () => Promise<TModel[]>;
   orWhere: (field: unknown, operator?: TWhereOperator, value?: any) => TSelectQueryExtended<TAttributes, TModel>;
@@ -68,7 +74,7 @@ const extendSelectQuery = <
     // Original methods which need aliasing for reuse
     _original_all: (placeholderValues: any) => TAttributes[];
     _original_where: (where: any) => void;
-    _original_orderBy: (columns: any) => void;
+    _original_orderBy: (builder: SQLiteColumn<ColumnBaseConfig<ColumnDataType, string>, {}, {}> | SQL<unknown>) => void;
     // Internal methods
     fieldToColumn: (field: string) => SQLiteColumn;
     // Properties which we don't need to expose
@@ -86,9 +92,22 @@ const extendSelectQuery = <
   // Execute => this.all
   // All => this._prepare().all(placeholderValues);
 
-  extendedSelectQuery.orderBy = (...columns): TSelectQueryExtended<TAttributes, TModel> => {
-    // @todo Support simple field name based ordering (e.g. `orderBy('name')`)
-    extendedSelectQuery._original_orderBy(columns);
+  /**
+   * `orderBy` extension to allow Laravel syntax
+   *
+   * @param {(string|SQLiteColumn|SQL)[]} orderBy
+   * @returns {TQueryExtended<TAttributes>}
+   */
+  extendedSelectQuery.orderBy = (...orderBy): TSelectQueryExtended<TAttributes, TModel> => {
+    if (typeof orderBy[0] === 'string') {
+      const column = extendedSelectQuery.fieldToColumn(orderBy[0]);
+      const direction = typeof orderBy[1] === 'string' && orderBy[1] === 'desc' ? desc : asc;
+      extendedSelectQuery._original_orderBy(direction(column));
+    } else {
+      extendedSelectQuery._original_orderBy(
+        ...(orderBy as [SQLiteColumn<ColumnBaseConfig<ColumnDataType, string>, {}, {}> | SQL<unknown>])
+      );
+    }
     return extendedSelectQuery;
   };
 

@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import collect from 'collect.js';
-import { eq } from 'drizzle-orm';
+import { asc, desc, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { resolve } from 'path';
@@ -899,5 +899,44 @@ describe('relationships', () => {
         expect(userComments[0]).toEqual(userComment);
       }
     }
+  });
+
+  describe('orderBy', () => {
+    it('supports Laravel syntax; column name, ascending by default', async () => {
+      const users = await user.query().orderBy('name').limit(5);
+      const userNames = users.map(({ name }) => name);
+      expect(userNames.length).toEqual(5);
+      expect(userNames).toEqual(['Ben', 'Bernie', 'Bill', 'Bob', 'Brad']);
+    });
+    it('supports Drizzle syntax; column name, ascending by default', async () => {
+      const users = await user.query().orderBy(asc(schema.usersTable.name)).limit(5);
+      const userNames = users.map(({ name }) => name);
+      expect(userNames.length).toEqual(5);
+      expect(userNames).toEqual(['Ben', 'Bernie', 'Bill', 'Bob', 'Brad']);
+    });
+    it('supports Laravel syntax; column name and explictly ascending', async () => {
+      const users = await user.query().orderBy('name', 'asc').limit(5);
+      const userNames = users.map(({ name }) => name);
+      expect(userNames.length).toEqual(5);
+      expect(userNames).toEqual(['Ben', 'Bernie', 'Bill', 'Bob', 'Brad']);
+    });
+    it('supports Drizzle syntax; column name and explicitly ascending', async () => {
+      const users = await user.query().orderBy(asc(schema.usersTable.name)).limit(5);
+      const userNames = users.map(({ name }) => name);
+      expect(userNames.length).toEqual(5);
+      expect(userNames).toEqual(['Ben', 'Bernie', 'Bill', 'Bob', 'Brad']);
+    });
+    it('supports Laravel syntax; column age and descending', async () => {
+      const users = await user.query().orderBy('age', 'desc').limit(5);
+      const userAges = users.map(({ age }) => age);
+      expect(userAges.length).toEqual(5);
+      expect(userAges).toEqual([43, 35, 34, 33, 32]);
+    });
+    it('supports Drizzle syntax; column age and descending', async () => {
+      const users = await user.query().orderBy(desc(schema.usersTable.age)).limit(5);
+      const userAges = users.map(({ age }) => age);
+      expect(userAges.length).toEqual(5);
+      expect(userAges).toEqual([43, 35, 34, 33, 32]);
+    });
   });
 });
