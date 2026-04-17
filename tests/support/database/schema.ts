@@ -16,6 +16,7 @@ export const usersTable = sqliteTable('users', {
   age: int().notNull(),
   email: text().notNull().unique(),
   town_id: int(),
+  is_developer: int({ mode: 'boolean' }),
 });
 
 /**

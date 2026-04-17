@@ -9,6 +9,7 @@ export interface UserAttributes {
   age: number;
   email: string;
   town_id?: number;
+  is_developer?: boolean;
   town?: Town;
   orders?: Order[];
   ordersPlaced?: Order[];

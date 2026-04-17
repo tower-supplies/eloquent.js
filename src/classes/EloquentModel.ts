@@ -331,7 +331,7 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
    * @returns {any}
    */
   getAttribute(key: keyof TAttributes, fallback: any = undefined): any {
-    if (this._attributes[key]) {
+    if (this._attributes[key] !== undefined) {
       return this._attributes[key];
     }
 
