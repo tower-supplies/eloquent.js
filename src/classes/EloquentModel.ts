@@ -723,6 +723,11 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
    * @returns {Promise<Collection<this>>}
    */
   async bulkUpsert(models: Collection<this>): Promise<Collection<this>> {
+    // Return if there are no models to process
+    if (!models.count()) {
+      return models;
+    }
+
     // Define index mapping; as some models cannot be persisted to there may be an index offset in the result
     const upsertMapping: number[] = [];
     models.each((model, index) => {

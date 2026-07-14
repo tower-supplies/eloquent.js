@@ -1033,5 +1033,10 @@ describe('relationships', () => {
       const queriedJulian = queriedUsers[0];
       expect(queriedJulian.age).toEqual(18);
     });
+
+    it('allows an empty collection to be passed without error', async () => {
+      const upsertedUsers = await user.bulkUpsert(collect());
+      expect(upsertedUsers).toEqual(collect());
+    });
   });
 });
