@@ -742,6 +742,11 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
       .map((model) => model._attributes)
       .toArray();
 
+    if (!values.length) {
+      // Nothing to update
+      return models;
+    }
+
     let results: TAttributes[] = [];
     if (this._primaryKeyColumn) {
       // Build columns to `set` on conflict with primary key

@@ -1038,5 +1038,16 @@ describe('relationships', () => {
       const upsertedUsers = await user.bulkUpsert(collect());
       expect(upsertedUsers).toEqual(collect());
     });
+
+    it('allows a collection containing only erroneous/incomplete models without error', async () => {
+      const jackieProperties = { name: 'Jackie', age: 33 }; // No email
+      const jackie = user.factory(jackieProperties);
+
+      const users = await user.bulkUpsert(collect([jackie]));
+      expect(users.count()).toEqual(1);
+      const upsertedJackie = users.get(0);
+      expect(upsertedJackie?.name).toEqual(jackieProperties.name);
+      expect(upsertedJackie?.id).not.toBeDefined();
+    });
   });
 });
