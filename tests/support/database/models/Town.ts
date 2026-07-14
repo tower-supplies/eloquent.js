@@ -5,7 +5,7 @@ import User from './User';
 export interface TownAttributes {
   id: number;
   name: string;
-  county_id: number;
+  county_id?: number;
   county?: County;
   users?: User[];
 }

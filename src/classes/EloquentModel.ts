@@ -11,6 +11,7 @@ import {
   Param,
   Relation,
   Relations,
+  sql,
   SQL,
 } from 'drizzle-orm';
 import { toCamelCase } from 'drizzle-orm/casing';
@@ -714,6 +715,78 @@ export default class EloquentModel<TAttributes extends Attributes, T extends TDa
       this._changes = {};
     }
     return success;
+  }
+
+  /**
+   * Bulk upsert
+   * @param {Collection<this>} models
+   * @returns {Promise<Collection<this>>}
+   */
+  async bulkUpsert(models: Collection<this>): Promise<Collection<this>> {
+    // Define index mapping; as some models cannot be persisted to there may be an index offset in the result
+    const upsertMapping: number[] = [];
+    models.each((model, index) => {
+      if (typeof index === 'number' && model.completedAttributes(model._attributes) !== undefined) {
+        upsertMapping.push(index);
+      }
+    });
+
+    // Build the values for upsert
+    const values = models
+      .filter((model) => model.completedAttributes(model._attributes) !== undefined)
+      .map((model) => model._attributes)
+      .toArray();
+
+    let results: TAttributes[] = [];
+    if (this._primaryKeyColumn) {
+      // Build columns to `set` on conflict with primary key
+      const set: Record<string, SQL> = {};
+      Object.values(getTableColumns(this._table))
+        .filter((column) => column !== this._primaryKeyColumn)
+        .forEach(({ name }) => {
+          set[name] = sql.raw(`excluded.${name}`);
+        });
+
+      results = (await this._database
+        .insert(this._table)
+        .values(values)
+        .onConflictDoUpdate({
+          target: this._primaryKeyColumn,
+          set,
+        })
+        .returning()) as TAttributes[];
+    } else {
+      results = (await this._database.insert(this._table).values(values).returning()) as TAttributes[];
+    }
+    //console.log('Bulk upsert', values, results);
+
+    const keyName = this.getKeyName();
+    if (results.length) {
+      results.forEach((result, index) => {
+        const model = models.get(upsertMapping[index]);
+        if (model) {
+          // Update primary key on models, where relevant
+          if (keyName) {
+            if (model._attributes[keyName] !== result[keyName]) {
+              //console.log(`Updating primary key: ${result[keyName]}`);
+              setProperty(model._attributes, keyName, result[keyName] as any);
+              model.changed(DatabaseChangeType.INSERT, model);
+            } else {
+              model.changed(DatabaseChangeType.UPDATE, model);
+            }
+          } else {
+            // No primary key, unable to know if model was inserted/updated
+            model.changed(DatabaseChangeType.UPDATE, model);
+          }
+
+          // Reset the changes on the model
+          model._original = model.completedAttributes(model._attributes);
+          model._changes = {};
+        }
+      });
+    }
+
+    return models;
   }
 
   /**

@@ -730,7 +730,7 @@ describe('relationships', () => {
 
   it('may be set One using the model class', () => {
     const newUser = user.factory({ name: 'Steve' });
-    const newTown = town.factory({ name: 'Coventry' });
+    const newTown = town.factory({ name: 'Coventry' }) as any;
     newUser.setAttribute('town', newTown);
     expect(newUser.town?.name).toEqual('Coventry');
   });
@@ -743,10 +743,12 @@ describe('relationships', () => {
 
   it('may be set Many using the model class', () => {
     const newCounty = county.factory({ name: 'Warwickshire' });
-    const newTown = town.factory({ name: 'Coventry' });
+    const newTown = town.factory({ name: 'Coventry' }) as any;
     newCounty.towns = [newTown];
     expect(newCounty.towns?.length).toEqual(1);
-    expect(newCounty.towns[0].name).toEqual('Coventry');
+    if (newCounty.towns?.length) {
+      expect(newCounty.towns[0].name).toEqual('Coventry');
+    }
   });
 
   it('may be set Many using the model attributes', () => {
@@ -952,6 +954,84 @@ describe('relationships', () => {
       const userAges = users.map(({ age }) => age);
       expect(userAges.length).toEqual(5);
       expect(userAges).toEqual([43, 35, 34, 33, 32]);
+    });
+  });
+
+  describe('bulkUpsert', () => {
+    it('correctly persists two new models', async () => {
+      const jackProperties = { name: 'Jack', age: 32, email: 'jack@eloquent.js' };
+      const jack = user.factory(jackProperties);
+
+      const jillProperties = { name: 'Jill', age: 33, email: 'jill@eloquent.js' };
+      const jill = user.factory(jillProperties);
+
+      const users = await user.bulkUpsert(collect([jack, jill]));
+      expect(users.count()).toEqual(2);
+      const upsertedJack = users.get(0);
+      expect(upsertedJack?.name).toEqual(jackProperties.name);
+      expect(upsertedJack?.id).toBeDefined();
+      expect(upsertedJack?.getChanges()).toEqual({});
+      const upsertedJill = users.get(1);
+      expect(upsertedJill?.name).toEqual(jillProperties.name);
+      expect(upsertedJill?.id).toBeDefined();
+      expect(upsertedJill?.getChanges()).toEqual({});
+    });
+
+    it('correctly persists one of two new models', async () => {
+      const jackieProperties = { name: 'Jackie', age: 33 }; // No email
+      const jackie = user.factory(jackieProperties);
+
+      const jasonProperties = { name: 'Jason', age: 32, email: 'jason@eloquent.js' };
+      const jason = user.factory(jasonProperties);
+
+      const users = await user.bulkUpsert(collect([jackie, jason]));
+      expect(users.count()).toEqual(2);
+      const upsertedJackie = users.get(0);
+      expect(upsertedJackie?.name).toEqual(jackieProperties.name);
+      expect(upsertedJackie?.id).not.toBeDefined();
+      expect(upsertedJackie?.getChanges()).toEqual(jackieProperties); // Should have unsaved changes
+      const upsertedJason = users.get(1);
+      expect(upsertedJason?.name).toEqual(jasonProperties.name);
+      expect(upsertedJason?.id).toBeDefined();
+      expect(upsertedJason?.getChanges()).toEqual({});
+    });
+
+    it('correctly updates two models', async () => {
+      const julianProperties = { name: 'Julian', age: 32, email: 'julian@eloquent.js' };
+      const julian = user.factory(julianProperties);
+
+      const juliaProperties = { name: 'Julia', age: 33, email: 'julia@eloquent.js' };
+      const julia = user.factory(juliaProperties);
+
+      const insertedUsers = await user.bulkUpsert(collect([julian, julia]));
+      expect(insertedUsers.count()).toEqual(2);
+      const insertedJulian = insertedUsers.get(0);
+      expect(insertedJulian?.name).toEqual(julianProperties.name);
+      expect(insertedJulian?.id).toBeDefined();
+      expect(insertedJulian?.getChanges()).toEqual({});
+      const insertedJulia = insertedUsers.get(1);
+      expect(insertedJulia?.name).toEqual(juliaProperties.name);
+      expect(insertedJulia?.id).toBeDefined();
+      expect(insertedJulia?.getChanges()).toEqual({});
+
+      // Adjust the ages to update
+      julian.age = 18;
+      julia.age = 19;
+
+      const upsertedUsers = await user.bulkUpsert(collect([julian, julia]));
+      expect(upsertedUsers.count()).toEqual(2);
+      const upsertedJulian = upsertedUsers.get(0);
+      expect(upsertedJulian?.age).toEqual(18);
+      expect(upsertedJulian?.getChanges()).toEqual({});
+      const upsertedJulia = upsertedUsers.get(1);
+      expect(upsertedJulia?.age).toEqual(19);
+      expect(upsertedJulia?.getChanges()).toEqual({});
+
+      // Re-query the database to ensure the expected results are not just correct due to object mutation
+      const queriedUsers = await user.query().where('email', 'julian@eloquent.js');
+      expect(queriedUsers.length).toEqual(1);
+      const queriedJulian = queriedUsers[0];
+      expect(queriedJulian.age).toEqual(18);
     });
   });
 });
